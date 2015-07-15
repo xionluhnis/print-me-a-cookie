@@ -1,3 +1,4 @@
+
 /****************************************************************************** 
 SparkFun Big Easy Driver Basic Demo
 Toni Klopfenstein @ SparkFun Electronics
@@ -59,7 +60,7 @@ void setup() {
   //Print function list for user selection
   Serial.println("Enter number for control option:");
   Serial.println("1. Turn at default microstep mode.");
-  Serial.println("2. Reverse direction at default microstep mode.");
+  Serial.println("2. Dotted Line Test.");
   Serial.println("3. Turn at 1/16th microstep mode.");
   Serial.println("4. Step forward and reverse directions.");
   Serial.println("5. Reverse direction at slow microstep mode.");
@@ -83,7 +84,7 @@ void loop() {
       }
       else if(user_input =='2')
       {
-        ReverseStepDefault();
+        DottedLineTest();
       }
       else if(user_input =='3')
       {
@@ -332,45 +333,49 @@ void ForwardBackwardStep()
 
 void DashedLineTest()
 {
-  Serial.println("Stepping at 1/16th microstep mode.");
-  digitalWrite(dir, HIGH); //Pull direction pin low to move "forward"
-  digitalWrite(MS1, HIGH); //Pull MS1,MS2, and MS3 high to set logic to 1/16th microstep resolution
-  digitalWrite(MS2, HIGH);
-  digitalWrite(MS3, HIGH);
-  digitalWrite(dirY, LOW); //Pull direction pin low to move "forward"
-  digitalWrite(MS1Y, HIGH); //Pull MS1,MS2, and MS3 high to set logic to 1/16th microstep resolution
-  digitalWrite(MS2Y, HIGH);
-  digitalWrite(MS3Y, HIGH);
-  for(x= 1; x<1000; x++)  //Loop the forward stepping enough times for motion to be visible
-  {
-    digitalWrite(stp,HIGH); //Trigger one step forward
-    digitalWrite(stpY,HIGH);
-    delay(1);
-    digitalWrite(stp,LOW); //Pull step pin low so it can be triggered again
-    digitalWrite(stpY,LOW);
-    delay(1);
-  }
-  delay(1000);
-  for(x= 1; x<1000; x++)  //Loop the forward stepping enough times for motion to be visible
-  {
-     //Trigger one step forward
-    digitalWrite(stpY,HIGH);
-    delay(1);
-     //Pull step pin low so it can be triggered again
-    digitalWrite(stpY,LOW);
-    delay(1);
-  }
-  delay(1000);
-  for(x= 1; x<1000; x++)  //Loop the forward stepping enough times for motion to be visible
-  {
-    digitalWrite(stp,HIGH); //Trigger one step forward
-    digitalWrite(stpY,HIGH);
-    delay(1);
-    digitalWrite(stp,LOW); //Pull step pin low so it can be triggered again
-    digitalWrite(stpY,LOW);
-    delay(1);
-  }
-  
+  //SmallStepReverseMode();
+  CurrentTestMode();
+  CurrentTestMode();
+  CurrentTestMode();
+  SmallStepMode();
+  SmallStepMode();
+  SmallStepY();
+  SmallStepY();
+  SmallStepY();
+  SmallStepY();
+  SmallStepReverseMode();
+  CurrentTestMode();
+  CurrentTestMode();
+  CurrentTestMode();
+  SmallStepMode();
+  SmallStepMode();
+  SmallStepMode();
+  SmallStepY();
+  Serial.println("Enter new option");
+  Serial.println();
+}
+
+void DottedLineTest()
+{
+  SmallStepReverseMode();
+  CurrentTestMode();
+  SmallStepMode();
+  SmallStepMode();
+  SmallStepMode();
+  SmallStepY();
+   SmallStepReverseMode();
+  CurrentTestMode();
+  SmallStepMode();
+  SmallStepMode();
+  SmallStepMode();
+  SmallStepY();
+  SmallStepY();
+   SmallStepReverseMode();
+  CurrentTestMode();
+  SmallStepMode();
+  SmallStepMode();
+  SmallStepMode();
+  SmallStepY();
   Serial.println("Enter new option");
   Serial.println();
 }
