@@ -18,6 +18,9 @@ Distributed as-is; no warranty is given.
 Example based off of demos by Brian Schmalz (designer of the Big Easy Driver).
 http://www.schmalzhaus.com/EasyDriver/Examples/EasyDriverExamples.html
 ******************************************************************************/
+#include "types.h"
+#include "stepper.h"
+
 //Declare pin functions on Arduino
 // EXTRUDER 0
 #define STP_E0  2
@@ -73,6 +76,8 @@ int error;
 int enPins[NUM_ENS];
 int ouPins[NUM_OUTS];
 
+typedef void (*Callback)();
+
 // state data
 struct PinProcess {
   unsigned long moves; // total number of action triggers
@@ -81,6 +86,7 @@ struct PinProcess {
   int first;
   int second;
   int eid; // enable pin id
+  Callback callback;
 };
 
 struct PinProcess processes[NUM_PINS];
@@ -129,6 +135,7 @@ void setup() {
     processes[i].first = HIGH;
     processes[i].second = LOW;
     processes[i].eid = 0;
+    processes[i].callback = 0;
   }
   // set eid of processes
   int eid = 0;
@@ -179,6 +186,8 @@ byte process() {
 
       if(processes[i].moves > 0){
         state = STATE_BUSY; // we are busy with one process at least
+      } else if(processes[i].callback != 0){
+        processes[i].callback(); // notify that we're done with this process
       }
     }
   }
@@ -186,64 +195,6 @@ byte process() {
   return STATE_IDLE;
 }
 
-int readInt(){
-  int val = 0;
-  int sign = 1;
-  while(Serial.available()){
-    char c = Serial.read();
-    int d = (int)(c - '0');
-    if(val == 0 && c == '-'){
-      sign = -1;
-    } else if(d >= 0 && d < 10) {
-      val *= 10;
-      val += d;
-    } else {
-      error = ERR_PARSE;
-      return val;
-    }
-  }
-  return sign * val;
-}
-
-unsigned long readULong(){
-  unsigned long val = 0L;
-  while(Serial.available()){
-    char c = Serial.read();
-    if(c == ' '){
-      break;
-    }
-    unsigned long d = (unsigned long)(c - '0');
-    if(d < 0 || d > 9){
-      error = ERR_PARSE;
-      return val;
-    }
-    val *= 10L;
-    val += d;
-  }
-  return val;
-}
-
-long readLong(){
-  long val = 0L;
-  long sign = 1L;
-  while(Serial.available()){
-    char c = Serial.read();
-    if(c == ' '){
-      break;
-    }
-    long d = (long)(c - '0');
-    if(val == 0L && c == '-'){
-      sign = -1L;
-    } else if(d < 0 || d > 9){
-      error = ERR_PARSE;
-      return val;
-    } else {
-      val *= 10L;
-      val += d;
-    }
-  }
-  return sign * val;
-}
 
 void resetAll(){
   for(int i = 0; i < NUM_PINS; ++i){
@@ -344,14 +295,17 @@ void end() {
   int active[NUM_PINS];
   for(int i = 0; i < NUM_PINS; ++i){
     active[i] = 0;
-    int eid = processes[i].eid;
-    if(isPending(i) && eid > 0){
-      active[i] = 1;
-    }
   }
   for(int i = 0; i < NUM_PINS; ++i){
-    if(isEnabler(i) && active[i] == 0){
-      digitalWrite(i, LOW);
+    int eid = processes[i].eid;
+    if(isPending(i) && eid > 0){
+      active[eid] = 1;
+    }
+  }
+  for(int i = 0; i < NUM_ENS; ++i){
+    int eid = enPins[i];
+    if(active[eid] == 0){
+      digitalWrite(eid, LOW);
     }
   }
 }
@@ -381,19 +335,37 @@ void loop() {
     readCommands();
   }
 }
-void stepBy(int stpPin, int dirPin, long move, unsigned long speed, unsigned long init){
+void impulse(int pin, int first, int second, unsigned long delay = 0, Callback cb = NULL){
+  processes[pin].moves = 1;
+  processes[pin].steps = 1;
+  processes[pin].count = delay;
+  processes[pin].first = first;
+  processes[pin].second = second;
+  if(cb) processes[pin].callback = cb;
+}
+void stepBy(int stpPin, int dirPin, long move, unsigned long speed, unsigned long init = 0L, Callback cb = NULL){
     
   // direction setting
-  processes[dirPin].moves = 1;
-  processes[dirPin].steps = 1;
-  processes[dirPin].count = 0;
-  processes[dirPin].first = processes[dirPin].second = move > 0 ? LOW : HIGH;
+  int dirValue = move > 0 ? LOW : HIGH;
+  change(dirPin, dirValue, dirValue, 0);
   // stepper movements
   processes[stpPin].moves = (unsigned long)(move > 0 ? move : -move) * speed;
   processes[stpPin].steps = speed;
   processes[stpPin].count = init; // must happen after direction is set
   processes[stpPin].first = HIGH;
   processes[stpPin].second = LOW;
+  if(cb) processes[stpPin].callback = cb;
+}
+
+void microstepBy(int stpPin, int dirPin, int ms1Pin, int ms2Pin, int ms3Pin, long move, unsigned long speed, unsigned long init, Callback cb = NULL){
+  impulse(ms1Pin, HIGH, HIGH, 0);
+  impulse(ms2Pin, HIGH, HIGH, 0);
+  impulse(ms3Pin, HIGH, HIGH, 0);
+  stepBy(stpPin, dirPin, move, speed, init, cb);
+  int delay = move * speed;
+  impulse(ms1Pin, LOW, LOW, delay);
+  impulse(ms2Pin, LOW, LOW, delay);
+  impulse(ms3Pin, LOW, LOW, delay);
 }
 
 //Default microstep mode function
@@ -450,6 +422,9 @@ void ReverseStepSlow()
 void CurrentTestMode()
 {
   Serial.println("Stepping at 1/16th microstep mode.");
+  microstepBy(STP_E0, DIR_E0, MS1_E0, MS2_E0, MS3_E0, 2000L, SECOND, 0L);
+  microstepBy(STP_Y, DIR_Y, MS1_Y, MS2_Y, MS3_Y, 2000L, SECOND, 0L);
+  /*
   digitalWrite(dir, HIGH); //Pull direction pin low to move "forward"
   digitalWrite(MS1, HIGH); //Pull MS1,MS2, and MS3 high to set logic to 1/16th microstep resolution
   digitalWrite(MS2, HIGH);
@@ -467,11 +442,14 @@ void CurrentTestMode()
     digitalWrite(STP_Y,LOW);
     delay(1);
   }
+  */
 }
 
 void Danger()
 {
   Serial.println("Moving in reverse at slow step mode.");
+  stepBy(STP_E0, DIR_E0, 200L, SECOND / 2L, 0L);
+  /*
   digitalWrite(dir, HIGH); //Pull direction pin high to move in "reverse"
   for(x= 1; x<200; x++)  //Loop the stepping enough times for motion to be visible
   {
@@ -480,11 +458,14 @@ void Danger()
     digitalWrite(STP_E0,LOW); //Pull step pin low so it can be triggered again
     delayMicroseconds(500);
   }
+  */
 }
 
 void ReverseStepDefault()
 {
   Serial.println("Moving in reverse at default step mode.");
+  stepBy(STP_E0, DIR_E0, -1000L, SECOND, 0L);
+  /*
   digitalWrite(dir, HIGH); //Pull direction pin high to move in "reverse"
   for(x= 1; x<1000; x++)  //Loop the stepping enough times for motion to be visible
   {
@@ -493,12 +474,15 @@ void ReverseStepDefault()
     digitalWrite(STP_E0,LOW); //Pull step pin low so it can be triggered again
     delay(1);
   }
+  */
 }
 
 // 1/16th microstep foward mode function
 void SmallStepMode()
 {
   Serial.println("Stepping at 1/16th microstep mode.");
+  microstepBy(STP_E0, DIR_E0, MS1_E0, MS2_E0, MS3_E0, 1000L, SECOND, 0L);
+  /*
   digitalWrite(dir, LOW); //Pull direction pin low to move "forward"
   digitalWrite(MS1, HIGH); //Pull MS1,MS2, and MS3 high to set logic to 1/16th microstep resolution
   digitalWrite(MS2, HIGH);
@@ -510,12 +494,15 @@ void SmallStepMode()
     digitalWrite(STP_E0,LOW); //Pull step pin low so it can be triggered again
     delay(1);
   }
+  */
 }
 
 // 1/16th microstep foward mode function
 void SmallStepY()
 {
   Serial.println("Stepping at 1/16th microstep mode.");
+  microstepBy(STP_Y, DIR_Y, MS1_Y, MS2_Y, MS3_Y, 1000L, SECOND, 0L);
+  /*
   digitalWrite(DIR_Y, LOW); //Pull direction pin low to move "forward"
   digitalWrite(MS1_Y, HIGH); //Pull MS1,MS2, and MS3 high to set logic to 1/16th microstep resolution
   digitalWrite(MS2_Y, HIGH);
@@ -527,12 +514,15 @@ void SmallStepY()
     digitalWrite(STP_Y,LOW); //Pull step pin low so it can be triggered again
     delay(1);
   }
+  */
 }
 
 // 1/16th microstep foward mode function
 void SmallStepReverseMode()
 {
   Serial.println("Stepping at 1/16th microstep reverse mode.");
+  microstepBy(STP_E0, DIR_E0, MS1_E0, MS2_E0, MS3_E0, -1000L, SECOND, 0L);
+  /*
   digitalWrite(dir, HIGH); //Pull direction pin low to move "Reverse"
   digitalWrite(MS1, HIGH); //Pull MS1,MS2, and MS3 high to set logic to 1/16th microstep resolution
   digitalWrite(MS2, HIGH);
@@ -544,6 +534,7 @@ void SmallStepReverseMode()
     digitalWrite(STP_E0,LOW); //Pull step pin low so it can be triggered again
     delay(1);
   }
+  */
 }
 
 //Forward/reverse stepping function
