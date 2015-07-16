@@ -1,6 +1,8 @@
 #ifndef COOKIE_TYPES
 #define COOKIE_TYPES
 
+#include "error.h"
+
 // basic types we need
 
 struct vec2 {

@@ -1,30 +1,7 @@
 
-/****************************************************************************** 
-SparkFun Big Easy Driver Basic Demo
-Toni Klopfenstein @ SparkFun Electronics
-February 2015
-https://github.com/sparkfun/Big_Easy_Driver
-
-Simple demo sketch to demonstrate how 5 digital pins can drive a bipolar stepper motor,
-using the Big Easy Driver (https://www.sparkfun.com/products/12859). Also shows the ability to change
-microstep size, and direction of motor movement.
-
-Development environment specifics:
-Written in Arduino 1.6.0
-
-This code is beerware; if you see me (or any other SparkFun employee) at the local, and you've found our code helpful, please buy us a round!
-Distributed as-is; no warranty is given.
-
-Example based off of demos by Brian Schmalz (designer of the Big Easy Driver).
-http://www.schmalzhaus.com/EasyDriver/Examples/EasyDriverExamples.html
-******************************************************************************/
+#include "error.h"
 #include "types.h"
 #include "stepper.h"
-
-// errors
-#define ERR_NONE  0
-#define ERR_PARSE 1
-int error;
 
 // delays in milliseconds
 #define DELAY_INTER 50
@@ -54,26 +31,26 @@ void react() {
 }
 
 // process events
-#define STATE_IDLE 1
-#define STATE_BUSY 0
-
-byte process() {
-  byte state = STATE_IDLE;
+void process() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->exec();
   }
   delayMilliseconds(DELAY_INTER);
   for(int i = 0; i < NUM_PINS; ++i){
     steppers[i]->release();
-    if(steppers[i]->isRunning()){
-      state = STATE_BUSY;
-    }
   }
   delayMilliseconds(DELAY_AFTER);
-  return state;
 }
 
+// check if idle
+int idle() {
+  for(int i = 0; i < NUM_STEPPERS; ++i){
+    if(steppers[i]->isRunning()) return 0;
+  }
+  return 1;
+}
 
+// reset al steppers and the error state
 void resetAll(){
   for(int i = 0; i < NUM_STEPPERS; ++i)
     steppers[i]->reset();
@@ -83,19 +60,23 @@ void resetAll(){
 
 // process user input
 void readCommands(){
-  if(Serial.available()){
+  while(Serial.available() && error <= ERR_NONE){
     // command type depends on first character
     char type = Serial.read();
     switch(type){
-      // pX where X = pin1 t1 s1 c1 pin2 t2 s2 c2 ...
+      // pX where X = pin delta speed init
       case 'p': {
-        while(Serial.available()){
+        if(Serial.available()){
           int pin = readInt();
           unsigned long moves = readLong();
           unsigned long steps = readLong();
           unsigned long count = readLong();
           if(steps == 0){
-            steps = 1;
+            steps = SECOND;
+          }
+          if(pin < 0 || pin >= NUM_STEPPERS){
+            error = ERR_INPUT;
+            break;
           }
           steppers[pin]->stepBy(moves, steps, count);
         }
@@ -104,6 +85,19 @@ void readCommands(){
       case 'r':
       case 'R': {
         resetAll();
+      } break;
+
+      // microstepping on/off
+      case '+':
+      case '-': {
+        if(Serial.available()){
+          int pin = readInt();
+          if(pin < 0 || pin >= NUM_STEPPERS){
+            error = ERR_INPUT;
+            break;
+          }
+          steppers[pin]->microstep(type == '+' ? LOW : HIGH);
+        }
       } break;
 
       // moveby dx dy dz sx [sy sz ix iy iz]
@@ -117,9 +111,9 @@ void readCommands(){
                       ix = readULong(),
                       iy = readULong(),
                       iz = readULong();
-        if(sx == 0) sx = 1;
-        if(sy == 0) sy = sx;
-        if(sz == 0) sz = sx;
+        if(sx == 0L) sx = SECOND;
+        if(sy == 0L) sy = sx;
+        if(sz == 0L) sz = sx;
         // if(dx) stpX.stepBy(dx, sx, ix);
         if(dy) stpY.stepBy(dy, sy, iy);
         // if(dz) stpZ.stepBy(dz, sz, iz);
@@ -130,9 +124,10 @@ void readCommands(){
         long delta = readLong();
         unsigned long speed = readULong(),
                       init  = readULong();
+        if(speed == 0L) speed = SECOND;
         int id = readInt();
-        if(id == 0) stepBy(STP_E0, DIR_E0, delta, speed, init);
-        // if(id == 1) stepBy(STP_E1, DIR_E1, delta, speed, init);
+        if(id == 0) stpE0.stepBy(delta, speed, init);
+        // if(id == 1) stpE1.stepBy(delta, speed, init);
       } break;
 
       default:
@@ -140,25 +135,8 @@ void readCommands(){
         break;
     }
   }
-}
-
-void logError() {
-  switch(error){
-    case 0:
-      return;
-    case 1:
-      Serial.println("Parse error!");
-      break;
-    case 2:
-      Serial.println("Invalid state!");
-      break;
-    case -1:
-      return;
-    default:
-      Serial.println("Unknown error!");
-      break;
-  }
-  error = -1;
+  // remove any extra
+  Serial.flush();
 }
 
 // Main loop
@@ -170,13 +148,12 @@ void loop() {
   react();
 
   // 2 = process scheduled events
-  byte state = STATE_IDLE;
   if(error == ERR_NONE){
-    state = process();
+    process();
   }
 
   // 3 = read user input
-  if(state == STATE_IDLE){
+  if(error != ERR_NONE || idle()){
     for(int i = 0; i < NUM_STEPPERS; ++i){
       steppers[i]->reset();
     }
@@ -407,33 +384,27 @@ void DashedLineTest(int i = 0){
       // microstep mode
       stpE0.microstep(HIGH);
       stpY.microstep(HIGH);
-    case 1:
-    case 2:
-    case 10:
-    case 11:
-    case 12:
+    case 4:
       // move
-      stpE0.stepBy(-2000L, SECOND, 0L);
-      stpY.stepBy(2000L, SECOND, 0L, DashedLinetest, i + 1);
+      stpE0.stepBy(-2000L * 3L, SECOND, 0L);
+      stpY.stepBy(2000L * 3L, SECOND, 0L, DashedLinetest, i + 1);
+      break;
+    case 1:
+      stpE0.stepBy(1000L * 2L, SECOND, 0L, DashedLinetest, i + 1);
+      break;
+    case 2:
+      stpY.stepBy(1000L * 4L, SECOND, 0L, DashedLinetest, i + 1);
       break;
     case 3:
-    case 4:
-    case 13:
-    case 14:
-    case 15:
-      stpE0.stepBy(1000L, SECOND, 0L, DashedLinetest, i + 1);
-      break;
-    case 5:
-    case 6:
-    case 7:
-    case 8:
-    case 16:
-      stpY.stepBy(1000L, SECOND, 0L, DashedLinetest, i + 1);
-      break;
-    case 9:
       stpE0.stepBy(-1000L, SECOND, 0L, DashedLineTest, i + 1);
       break;
-    case 17:
+    case 5:
+      stpE0.stepBy(1000L * 3L, SECOND, 0L, DashedLineTest, i + 1);
+      break;
+    case 6:
+      stpY.stepBy(1000L, SECOND, 0L, DashedLineTest, i + 1);
+      break;
+    case 7:
       // disable microstepping
       stpE0.microstep(LOW);
       stpE1.microstep(LOW);
@@ -445,23 +416,23 @@ void DashedLineTest(int i = 0){
       break;
   }
   /*
+  CurrentTestMode(); // 0
   CurrentTestMode();
   CurrentTestMode();
-  CurrentTestMode();
+  SmallStepMode(); // 1
   SmallStepMode();
-  SmallStepMode();
+  SmallStepY(); // 2
   SmallStepY();
   SmallStepY();
   SmallStepY();
-  SmallStepY();
-  SmallStepReverseMode();
+  SmallStepReverseMode(); // 3
+  CurrentTestMode(); // 4
   CurrentTestMode();
   CurrentTestMode();
-  CurrentTestMode();
+  SmallStepMode(); // 5
   SmallStepMode();
   SmallStepMode();
-  SmallStepMode();
-  SmallStepY();
+  SmallStepY(); // 6
   */
 }
 
@@ -471,36 +442,58 @@ void DottedLineTest(int i = 0)
     case 0:
       stpE0.microstep(HIGH);
       stpY.microstep(HIGH);
+    case 4:
+    case 8:
       stpE0.stepBy(-1000L, SECOND, 0L, DottedLineTest, i + 1);
       break;
     case 1:
+    case 5:
+    case 9:
       stpE0.stepBy(-2000L, SECOND, 0L);
       stpY.stepBy(2000L, SECOND, 0L, DottedLineTest, i + 1);
       break;
     case 2:
+    case 6:
+    case 10:
+      stpE0.stepBy(1000L * 3L, SECOND, 0L, DottedLineTest, i + 1);
+      break;
     case 3:
-    case 4:
-      stp
+    case 11:
+      stpY.stepBy(1000L, SECOND, 0L, DottedLineTest, i + 1);
+      break;
+    case 7:
+      stpY.stepBy(1000L, SECOND, 0L, DottedLineTest, i + 1);
+      break;
+    case 12:
+      // disable microstepping
+      stpE0.microstep(LOW);
+      stpE1.microstep(LOW);
+      // done
+      Serial.println("Done with dashed line test.");
+      return;
+    default:
+      error = -2;
+      break;
   }
   /*
-  SmallStepReverseMode();
-  CurrentTestMode();
+  SmallStepReverseMode(); // 0
+  CurrentTestMode(); // 1
+  SmallStepMode(); // 2
   SmallStepMode();
   SmallStepMode();
+  SmallStepY(); // 3
+   SmallStepReverseMode(); // 4
+  CurrentTestMode(); // 5
+  SmallStepMode(); // 6
   SmallStepMode();
+  SmallStepMode();
+  SmallStepY(); // 7
   SmallStepY();
-   SmallStepReverseMode();
-  CurrentTestMode();
+   SmallStepReverseMode(); // 8
+  CurrentTestMode(); // 9
+  SmallStepMode(); // 10
   SmallStepMode();
   SmallStepMode();
-  SmallStepMode();
-  SmallStepY();
-  SmallStepY();
-   SmallStepReverseMode();
-  CurrentTestMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepY();
+  SmallStepY(); // 11
   */
 }
