@@ -1,17 +1,20 @@
 #pragma once
 
+#include "Arduino.h"
+
 class Stepper {
 public:
 
   typedef void (*Callback)(int state);
 
-  public static const int STEP = 0;
-  public static const int DIRECTION = 1;
-  public static const int MICROSTEP = 2;
-  public static const int ENABLE = 3;
+  static const int STEP = 0;
+  static const int DIRECTION = 1;
+  static const int MICROSTEP = 2;
+  static const int ENABLE = 3;
 
   Stepper(int s, int d, int m1, int m2, int m3, int e)
     : stp(s), dir(d), ms1(m1), ms2(m2), ms3(m3), en(e) {
+      enabled = false;
   }
   void setup() {
     pinMode(stp, OUTPUT);
@@ -39,8 +42,9 @@ public:
 
   void exec(){
     if(moves > 0){
-      digitalWrite(en, LOW);
+      // Serial.println("exec");
       if(count == 0){
+        // Serial.println("step");
         digitalWrite(stp, HIGH);
       }
     }
@@ -48,27 +52,32 @@ public:
 
   void release() {
     if(moves > 0){
+      // Serial.println("release");
       if(count == 0){
         digitalWrite(stp, LOW);
-        digitalWrite(en, HIGH); // lock
         count = steps;
         --moves;
+      } else {
+        --count;
+      }
+      if(moves == 0){
+        disable();
         // callback if there's one
         if(callback != NULL){
           callback(state);
         }
-      } else {
-        --count;
       }
     }
   }
 
   void microstep(int m) {
-    digitalWrite(en, LOW);
+    Serial.println("Microstep");
+    enable();
     digitalWrite(ms1, m);
     digitalWrite(ms2, m);
     digitalWrite(ms3, m);
     digitalWrite(en, HIGH);
+    disable();
   }
 
   int isRunning(){
@@ -81,7 +90,11 @@ public:
   }
 
   void stepBy(long delta, unsigned long speed = 1L, unsigned long init = 0L, Callback cb = NULL, int state0 = 0){
-    digitalWrite(en, LOW);
+    Serial.print("stepBy ");
+    Serial.print(delta);
+    Serial.print(" ");
+    Serial.println(speed);
+    enable();
     if(delta > 0){
       moves = (unsigned long)delta;
       digitalWrite(dir, LOW); // forward
@@ -89,10 +102,23 @@ public:
       moves = (unsigned long)(-delta);
       digitalWrite(dir, HIGH); // backward
     }
-    speed = steps;
+    steps = speed;
     count = init;
     callback = cb;
     state = state0;
+  }
+
+protected:
+  void enable(){
+    digitalWrite(en, LOW);
+    enabled = true;
+    Serial.println("enable");
+  }
+
+  void disable(){
+    digitalWrite(en, HIGH);
+    enabled = false;
+    Serial.println("disable");
   }
 
 private:
@@ -105,4 +131,7 @@ private:
   // callback
   Callback callback;
   int state;
-}
+
+  // state
+  boolean enabled;
+};

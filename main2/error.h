@@ -1,12 +1,14 @@
 #pragma once
 
+#include "Arduino.h"
+
 // errors
 enum ErrorType {
   ERR_NONE  = 0,
   ERR_PARSE = 1,
   ERR_STATE = 2,
   ERR_INPUT = 3
-}
+};
 
 int error;
 

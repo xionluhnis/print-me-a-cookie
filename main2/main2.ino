@@ -4,9 +4,11 @@
 #include "stepper.h"
 
 // delays in milliseconds
-#define DELAY_INTER 50
-#define DELAY_AFTER 30
-#define SECOND      (1000L/80L)
+#define delayFunc delayMicroseconds
+#define DELAY_INTER 100
+#define DELAY_AFTER 100
+#define SECOND      (1L)
+#define MICROSECOND (1L)
 
 // steppers
 Stepper stpE0(2, 3, 4, 5, 6, 7);
@@ -35,11 +37,11 @@ void process() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->exec();
   }
-  delayMilliseconds(DELAY_INTER);
-  for(int i = 0; i < NUM_PINS; ++i){
+  delayFunc(DELAY_INTER);
+  for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->release();
   }
-  delayMilliseconds(DELAY_AFTER);
+  delayFunc(DELAY_AFTER);
 }
 
 // check if idle
@@ -105,9 +107,9 @@ void readCommands(){
         long dx = readLong(),
              dy = readLong(),
              dz = readLong();
-        unsigned long sx = readULong(),
-                      sy = readULong(),
-                      sz = readULong(),
+        unsigned long sx = readULong() * MICROSECOND,
+                      sy = readULong() * MICROSECOND,
+                      sz = readULong() * MICROSECOND,
                       ix = readULong(),
                       iy = readULong(),
                       iz = readULong();
@@ -119,9 +121,29 @@ void readCommands(){
         // if(dz) stpZ.stepBy(dz, sz, iz);
       } break;
 
-      // extrudeBy total steps init id
-      case 'e': {
+      case 'Y':
+      case 'y': {
+        if(type == 'y'){
+          stpY.microstep(HIGH);
+        } else {
+          stpY.microstep(LOW);
+        }
         long delta = readLong();
+        unsigned long speed = readULong() * MICROSECOND,
+                      init  = readULong();
+        if(speed == 0L) speed = SECOND;
+        if(delta) stpY.stepBy(delta, speed, init);
+      }
+
+      // extrudeBy total steps init id
+      case 'E':
+      case 'e': {
+        if(type == 'e'){
+          stpE0.microstep(HIGH);
+        } else {
+          stpE0.microstep(LOW);
+        }
+        long delta = -readLong();
         unsigned long speed = readULong(),
                       init  = readULong();
         if(speed == 0L) speed = SECOND;
@@ -129,6 +151,12 @@ void readCommands(){
         if(id == 0) stpE0.stepBy(delta, speed, init);
         // if(id == 1) stpE1.stepBy(delta, speed, init);
       } break;
+
+      /**
+       * Successful commands
+       * 
+       * e/y1000 5 = 1000 moves at 5 steps speed with delayMicroseconds 100
+       */
 
       default:
         // otherwise
@@ -153,12 +181,16 @@ void loop() {
   }
 
   // 3 = read user input
-  if(error != ERR_NONE || idle()){
+  if(error > ERR_NONE){
     for(int i = 0; i < NUM_STEPPERS; ++i){
       steppers[i]->reset();
     }
-    readCommands();
   }
+  if(idle()){
+    Serial.println("Idle wait.");
+    delay(1000);
+  }
+  readCommands();
 }
 
 //Default microstep mode function
@@ -376,8 +408,7 @@ void ForwardBackwardStep(int i = 0)
   */
 }
 
-void DashedLineTest(int i = 0){
-{
+void DashedLineTest(int i = 0) {
   //SmallStepReverseMode();
   switch(i){
     case 0:
@@ -387,13 +418,13 @@ void DashedLineTest(int i = 0){
     case 4:
       // move
       stpE0.stepBy(-2000L * 3L, SECOND, 0L);
-      stpY.stepBy(2000L * 3L, SECOND, 0L, DashedLinetest, i + 1);
+      stpY.stepBy(2000L * 3L, SECOND, 0L, DashedLineTest, i + 1);
       break;
     case 1:
-      stpE0.stepBy(1000L * 2L, SECOND, 0L, DashedLinetest, i + 1);
+      stpE0.stepBy(1000L * 2L, SECOND, 0L, DashedLineTest, i + 1);
       break;
     case 2:
-      stpY.stepBy(1000L * 4L, SECOND, 0L, DashedLinetest, i + 1);
+      stpY.stepBy(1000L * 4L, SECOND, 0L, DashedLineTest, i + 1);
       break;
     case 3:
       stpE0.stepBy(-1000L, SECOND, 0L, DashedLineTest, i + 1);
@@ -407,7 +438,7 @@ void DashedLineTest(int i = 0){
     case 7:
       // disable microstepping
       stpE0.microstep(LOW);
-      stpE1.microstep(LOW);
+      stpY.microstep(LOW);
       // done
       Serial.println("Done with dashed line test.");
       return;
@@ -467,7 +498,7 @@ void DottedLineTest(int i = 0)
     case 12:
       // disable microstepping
       stpE0.microstep(LOW);
-      stpE1.microstep(LOW);
+      stpY.microstep(LOW);
       // done
       Serial.println("Done with dashed line test.");
       return;

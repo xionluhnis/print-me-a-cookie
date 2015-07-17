@@ -1,17 +1,17 @@
-#ifndef COOKIE_TYPES
-#define COOKIE_TYPES
+#pragma once
 
+#include "Arduino.h"
 #include "error.h"
 
 // basic types we need
 
 struct vec2 {
   int x, y;
-}
+};
 
 struct vec3 {
   int x, y, z;
-}
+};
 
 inline vec2 v2(int x, int y){
   vec2 v = { x, y };
@@ -85,4 +85,3 @@ long readLong(){
   return sign * val;
 }
 
-#endif
