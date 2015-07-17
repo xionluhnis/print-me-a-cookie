@@ -1,4 +1,3 @@
-
 /****************************************************************************** 
 SparkFun Big Easy Driver Basic Demo
 Toni Klopfenstein @ SparkFun Electronics
@@ -59,15 +58,15 @@ void setup() {
   Serial.println();
   //Print function list for user selection
   Serial.println("Enter number for control option:");
-  Serial.println("1. Turn at default microstep mode.");
+  Serial.println("1. Extrude Upward at default mode.");
   Serial.println("2. Dotted Line Test.");
-  Serial.println("3. Turn at 1/16th microstep mode.");
+  Serial.println("3. Extrude Upward at 1/16th microstep mode.");
   Serial.println("4. Step forward and reverse directions.");
-  Serial.println("5. Reverse direction at slow microstep mode.");
-  Serial.println("6. Turn at 1/16th microstep reverse mode.");
+  Serial.println("5. Extrude Downward slow mode.");
+  Serial.println("6. Extrude Downward at 1/16th microstep mode.");
   Serial.println("7. Line Test (16th Microstep)");
-  Serial.println("8. Turn at default microstep mode Y");
-  Serial.println("9. Small Step Y");
+  Serial.println("8. Move Forward at Default Microstep Mode Y");
+  Serial.println("9. Move Forward at 16th Microstep Y");
   Serial.println("0. Dashed Line Test");
   Serial.println();
 }
@@ -80,7 +79,7 @@ void loop() {
       digitalWrite(ENY, LOW);
       if (user_input =='1')
       {
-         StepForwardDefault();
+         ExtrudeUpwardDefault();
       }
       else if(user_input =='2')
       {
@@ -88,7 +87,7 @@ void loop() {
       }
       else if(user_input =='3')
       {
-        SmallStepMode();
+        ExtrudeUpwardMicro();
       }
       else if(user_input =='4')
       {
@@ -96,15 +95,15 @@ void loop() {
       }
        else if(user_input =='5')
       {
-        ReverseStepSlow();
+        ExtrudeDownwardSlow();
       }
        else if(user_input =='6')
       {
-        SmallStepReverseMode();
+        ExtrudeDownwardMicro();
       }
       else if(user_input =='7')
       {
-        CurrentTestMode();
+        ExtrudeDownwardMicroStepForwardMicroY();
       }
       else if(user_input =='8')
       {
@@ -112,7 +111,7 @@ void loop() {
       }
        else if(user_input =='9')
        {
-        SmallStepY();
+        StepForwardMicroY();
        }
         else if(user_input =='0')
        {
@@ -144,7 +143,7 @@ void resetBEDPins()
 }
 
 //Default microstep mode function
-void StepForwardDefault()
+void ExtrudeUpwardDefault()
 {
   Serial.println("Moving forward at default step mode.");
   digitalWrite(dir, LOW); //Pull direction pin low to move "forward"
@@ -175,7 +174,7 @@ void StepForwardDefaultY()
 }
 
 //Reverse default microstep mode function
-void ReverseStepSlow()
+void ExtrudeDownwardSlow()
 {
   Serial.println("Moving in reverse at slow step mode.");
   digitalWrite(dir, HIGH); //Pull direction pin high to move in "reverse"
@@ -191,7 +190,7 @@ void ReverseStepSlow()
 }
 
 //Reverse default microstep mode function long then forward to cut strand
-void CurrentTestMode()
+void ExtrudeDownwardMicroStepForwardMicroY()
 {
   Serial.println("Stepping at 1/16th microstep mode.");
   digitalWrite(dir, HIGH); //Pull direction pin low to move "forward"
@@ -230,7 +229,7 @@ void Danger()
   Serial.println();
 }
 
-void ReverseStepDefault()
+void ExtrudeDownwardDefault()
 {
   Serial.println("Moving in reverse at default step mode.");
   digitalWrite(dir, HIGH); //Pull direction pin high to move in "reverse"
@@ -246,7 +245,7 @@ void ReverseStepDefault()
 }
 
 // 1/16th microstep foward mode function
-void SmallStepMode()
+void ExtrudeUpwardMicro()
 {
   Serial.println("Stepping at 1/16th microstep mode.");
   digitalWrite(dir, LOW); //Pull direction pin low to move "forward"
@@ -265,7 +264,7 @@ void SmallStepMode()
 }
 
 // 1/16th microstep foward mode function
-void SmallStepY()
+void StepForwardMicroY()
 {
   Serial.println("Stepping at 1/16th microstep mode.");
   digitalWrite(dirY, LOW); //Pull direction pin low to move "forward"
@@ -284,7 +283,32 @@ void SmallStepY()
 }
 
 // 1/16th microstep foward mode function
-void SmallStepReverseMode()
+void ExtrudeUpwardDefaultStepForwardMicroY()
+{
+  Serial.println("Stepping at 1/16th microstep mode.");
+  digitalWrite(dirY, LOW); //Pull direction pin low to move "forward"
+  digitalWrite(MS1Y, HIGH); //Pull MS1,MS2, and MS3 high to set logic to 1/16th microstep resolution
+  digitalWrite(MS2Y, HIGH);
+  digitalWrite(MS3Y, HIGH);
+  digitalWrite(dir, LOW); //Pull direction pin low to move "forward"
+  digitalWrite(MS1, HIGH); //Pull MS1,MS2, and MS3 high to set logic to 1/16th microstep resolution
+  digitalWrite(MS2, HIGH);
+  digitalWrite(MS3, HIGH);
+  for(x= 1; x<1000; x++)  
+  {
+    digitalWrite(stpY,HIGH); 
+    digitalWrite(stp,HIGH); 
+    delay(1);
+    digitalWrite(stpY,LOW); 
+    digitalWrite(stp,LOW); 
+    delay(1);
+  }
+  Serial.println("Enter new option");
+  Serial.println();
+}
+
+// 1/16th microstep foward mode function
+void ExtrudeDownwardMicro()
 {
   Serial.println("Stepping at 1/16th microstep reverse mode.");
   digitalWrite(dir, HIGH); //Pull direction pin low to move "Reverse"
@@ -333,49 +357,53 @@ void ForwardBackwardStep()
 
 void DashedLineTest()
 {
-  //SmallStepReverseMode();
-  CurrentTestMode();
-  CurrentTestMode();
-  CurrentTestMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepY();
-  SmallStepY();
-  SmallStepY();
-  SmallStepY();
-  SmallStepReverseMode();
-  CurrentTestMode();
-  CurrentTestMode();
-  CurrentTestMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepY();
+  ExtrudeDownwardMicro();
+  ExtrudeDownwardMicroStepForwardMicroY();
+  ExtrudeDownwardMicroStepForwardMicroY();
+  ExtrudeDownwardMicroStepForwardMicroY();
+  //ExtrudeUpwardMicro();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeDownwardMicro();
+  ExtrudeDownwardMicro();
+  ExtrudeDownwardMicroStepForwardMicroY();
+  ExtrudeDownwardMicroStepForwardMicroY();
+  ExtrudeDownwardMicroStepForwardMicroY();
+  //ExtrudeUpwardMicro();
+  ExtrudeUpwardDefaultStepForwardMicroY();
   Serial.println("Enter new option");
   Serial.println();
 }
 
 void DottedLineTest()
 {
-  SmallStepReverseMode();
-  CurrentTestMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepY();
-   SmallStepReverseMode();
-  CurrentTestMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepY();
-  SmallStepY();
-   SmallStepReverseMode();
-  CurrentTestMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepMode();
-  SmallStepY();
+  ExtrudeDownwardMicro();
+  ExtrudeDownwardMicro();
+  ExtrudeDownwardMicro();
+//  ExtrudeDownwardMicro();
+  //ExtrudeDownwardMicroStepForwardMicroY();
+  //ExtrudeUpwardDefault();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeDownwardMicro();
+  ExtrudeDownwardMicro();
+  ExtrudeDownwardMicro();
+ // ExtrudeDownwardMicro();
+  //ExtrudeDownwardMicroStepForwardMicroY();
+  //ExtrudeUpwardDefault();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeDownwardMicro();
+  ExtrudeDownwardMicro();
+  ExtrudeDownwardMicro();
+ // ExtrudeDownwardMicro();
+  //ExtrudeDownwardMicroStepForwardMicroY();
+  //ExtrudeUpwardDefault();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeUpwardDefaultStepForwardMicroY();
+  ExtrudeUpwardDefaultStepForwardMicroY();
   Serial.println("Enter new option");
   Serial.println();
 }
