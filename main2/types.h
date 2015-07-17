@@ -29,10 +29,14 @@ inline vec3 v3(int x, int y, int z){
 int readInt(){
   int val = 0;
   int sign = 1;
+  boolean first = true;
   while(Serial.available()){
     char c = Serial.read();
     int d = (int)(c - '0');
-    if(val == 0 && c == '-'){
+    if(c == ' '){
+      if(first) continue
+      else break;
+    } else if(val == 0 && c == '-'){
       sign = -1;
     } else if(d >= 0 && d < 10) {
       val *= 10;
@@ -41,16 +45,19 @@ int readInt(){
       error = ERR_PARSE;
       return val;
     }
+    first = false;
   }
   return sign * val;
 }
 
 unsigned long readULong(){
   unsigned long val = 0L;
+  boolean first = true;
   while(Serial.available()){
     char c = Serial.read();
     if(c == ' '){
-      break;
+      if(first) continue;
+      else break;
     }
     unsigned long d = (unsigned long)(c - '0');
     if(d < 0 || d > 9){
@@ -59,6 +66,7 @@ unsigned long readULong(){
     }
     val *= 10L;
     val += d;
+    first = false;
   }
   return val;
 }
@@ -66,10 +74,12 @@ unsigned long readULong(){
 long readLong(){
   long val = 0L;
   long sign = 1L;
+  boolean first = true;
   while(Serial.available()){
     char c = Serial.read();
     if(c == ' '){
-      break;
+      if(first) continue;
+      else break;
     }
     long d = (long)(c - '0');
     if(val == 0L && c == '-'){
@@ -81,6 +91,7 @@ long readLong(){
       val *= 10L;
       val += d;
     }
+    first = false;
   }
   return sign * val;
 }

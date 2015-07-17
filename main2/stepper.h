@@ -12,6 +12,14 @@ public:
   static const int MICROSTEP = 2;
   static const int ENABLE = 3;
 
+  // Microstep modes
+  static const byte MS_FULL = b000;
+  static const byte MS_1_1  = b000;
+  static const byte MS_1_2  = b100;
+  static const byte MS_1_4  = b010;
+  static const byte MS_1_8  = b001;
+  static const byte MS_1_16 = b111;
+
   Stepper(int s, int d, int m1, int m2, int m3, int e)
     : stp(s), dir(d), ms1(m1), ms2(m2), ms3(m3), en(e) {
       enabled = false;
@@ -70,18 +78,24 @@ public:
     }
   }
 
-  void microstep(int m) {
+  void microstep(byte mode = MS_FULL) {
     Serial.println("Microstep");
     enable();
-    digitalWrite(ms1, m);
-    digitalWrite(ms2, m);
-    digitalWrite(ms3, m);
+    int  ms[] = { ms1, ms2, ms3 };
+    byte mask[] = { b100, b010, b001 };
+    for(int i = 0; i < 3; ++i){
+      digitalWrite(ms[i], mask[i] & mode ? HIGH : LOW);
+    }
     digitalWrite(en, HIGH);
     disable();
   }
 
-  int isRunning(){
+  boolean isRunning(){
     return moves > 0;
+  }
+
+  boolean isEnabled(){
+    return enabled;
   }
 
   void setCallback(Callback cb, int s0){
