@@ -133,7 +133,7 @@ void readCommands(){
                       init  = readULong();
         if(speed == 0L) speed = SECOND;
         if(delta) stpY.stepBy(delta, speed, init);
-      }
+      } break;
 
       // extrudeBy total steps init id
       case 'E':
