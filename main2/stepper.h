@@ -17,7 +17,7 @@ public:
   static const byte MS_1_1  = b000;
   static const byte MS_1_2  = b100;
   static const byte MS_1_4  = b010;
-  static const byte MS_1_8  = b001;
+  static const byte MS_1_8  = b110;
   static const byte MS_1_16 = b111;
 
   Stepper(int s, int d, int m1, int m2, int m3, int e)
