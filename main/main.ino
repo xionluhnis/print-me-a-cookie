@@ -61,7 +61,7 @@ void setup() {
   Serial.println("1. Extrude Upward at default mode.");
   Serial.println("2. Dotted Line Test.");
   Serial.println("3. Extrude Upward at 1/16th microstep mode.");
-  Serial.println("4. Step forward and reverse directions.");
+  Serial.println("4. Step Backwards Default Y.");
   Serial.println("5. Extrude Downward slow mode.");
   Serial.println("6. Extrude Downward at 1/16th microstep mode.");
   Serial.println("7. Line Test (16th Microstep)");
@@ -91,7 +91,7 @@ void loop() {
       }
       else if(user_input =='4')
       {
-        ForwardBackwardStep();
+        StepBackwardsDefaultY();
       }
        else if(user_input =='5')
       {
@@ -162,6 +162,21 @@ void StepForwardDefaultY()
 {
   Serial.println("Moving Y forward at default step mode.");
   digitalWrite(dirY, LOW); //Pull direction pin low to move "forward"
+  for(x= 1; x<200; x++)  //Loop the forward stepping enough times for motion to be visible
+  {
+    digitalWrite(stpY,HIGH); //Trigger one step forward
+    delay(2);
+    digitalWrite(stpY,LOW); //Pull step pin low so it can be triggered again
+    delay(2);
+  }
+  Serial.println("Enter new option");
+  Serial.println();
+}
+
+void StepBackwardsDefaultY()
+{
+  Serial.println("Moving Y forward at default step mode.");
+  digitalWrite(dirY, HIGH); //Pull direction pin low to move "forward"
   for(x= 1; x<200; x++)  //Loop the forward stepping enough times for motion to be visible
   {
     digitalWrite(stpY,HIGH); //Trigger one step forward

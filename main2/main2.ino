@@ -138,7 +138,7 @@ void readCommands(){
                       init  = readULong();
         if(speed == 0L) speed = HALF_MILLISECOND;
         if(delta) stpY.stepBy(delta, speed, init);
-      }
+      } break;
 
       // extrude delta steps init eid
       case 'E':
