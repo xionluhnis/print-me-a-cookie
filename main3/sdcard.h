@@ -6,14 +6,8 @@
 
 namespace sdcard {
 
-  // SD card
-  Sd2Card card;
-  SdVolume volume;
-  SdFile root;
-  
+  // state
   File dir, file;
-
-  const int chipSelect = 4;  
 
   void begin() {
     pinMode(SS, OUTPUT);
@@ -24,7 +18,12 @@ namespace sdcard {
   File & currentFile(){
     return file;
   }
-  
+
+/*
+  Sd2Card card;
+  SdVolume volume;
+  SdFile root;
+  const int chipSelect = 4;  
   void test(){
     // we'll use the initialization code from the utility libraries
     // since we're just testing if the card is working!
@@ -83,6 +82,10 @@ namespace sdcard {
     
     // list all files in the card with date and size
     root.ls(LS_R | LS_DATE | LS_SIZE);
+  }
+  */
+  void test() {
+    // reimplement
   }
   
   void list() {

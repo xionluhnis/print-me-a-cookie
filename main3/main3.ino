@@ -22,12 +22,32 @@ Stepper stpY(8, 9, 10, 11, 12, 13);
 Stepper stpZ(22, 23, 24, 25, 26, 27);
 Stepper stpX(28, 29, 30, 31, 32, 33);
 
-#define NUM_STEPPERS 2
+#define NUM_STEPPERS 4
 Stepper *steppers[NUM_STEPPERS];
 
+// callback type
+typedef void (*Callback)(int state);
+
+// global callbacks
+Callback idleCallback, errorCallback;
+
+//
+// declaration of functions
+//
+void setup();
+void loop();
+void react();
+void process();
+boolean idle();
+void readCommands(Stream& input = Serial);
+void processFile(File &file);
+
+///// Setup Arduino ////////////////////////////////////////////
 void setup() {
   steppers[0] = &stpE0;
   steppers[1] = &stpY;
+  steppers[2] = &stpZ;
+  steppers[3] = &stpX;
   for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->setup();
   }
@@ -35,15 +55,17 @@ void setup() {
 
   // sd card setup
   sdcard::begin();
+
+  // global callbacks
+  idleCallback = errorCallback = NULL;
 }
 
-
-// react to external input (non-user)
+///// React to external input //////////////////////////////////
 void react() {
 
 }
 
-// process events
+///// Process events ///////////////////////////////////////////
 void process() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->exec();
@@ -55,7 +77,7 @@ void process() {
   delayFunc(DELAY_AFTER);
 }
 
-// check if idle
+///// Check if idle ////////////////////////////////////////////
 boolean idle() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     if(steppers[i]->isRunning()) return false;
@@ -63,7 +85,7 @@ boolean idle() {
   return true;
 }
 
-// reset al steppers and the error state
+///// Reset states and errors //////////////////////////////////
 void resetAll(){
   for(int i = 0; i < NUM_STEPPERS; ++i)
     steppers[i]->reset();
@@ -71,20 +93,32 @@ void resetAll(){
   Serial.println("Reset.");
 }
 
-// process user input
-void readCommands(Stream& input = Serial){
-  while(input.available() && error <= ERR_NONE){
+///// Process commands /////////////////////////////////////////
+void readCommands(Stream& input){
+  LineParser line(input);
+  while(line.available() && error <= ERR_NONE){
     // command type depends on first character
-    char type = input.read();
+    char type = line.readChar();
     switch(type){
+
+      // --- line comment
+      case '#': {
+        Serial.print("#");
+        line.skip(true);
+      } break;
+
+      // --- new line
+      case '\n':
+      case '\r':
+        return;
       
       // --- sX where X = pin delta speed init
       case 's': {
-        if(input.available()){
-          int pin = readInt(input);
-          unsigned long moves = readLong(input);
-          unsigned long steps = readLong(input);
-          unsigned long count = readLong(input);
+        if(line.available()){
+          int pin = line.readInt();
+          unsigned long moves = line.readLong();
+          unsigned long steps = line.readLong();
+          unsigned long count = line.readLong();
           if(steps == 0){
             steps = HALF_MILLISECOND;
           }
@@ -105,8 +139,8 @@ void readCommands(Stream& input = Serial){
       // --- microstepping mode
       case '+':
       case '-': {
-        if(input.available()){
-          int pin = readInt(input);
+        if(line.available()){
+          int pin = line.readInt();
           if(pin < 0 || pin >= NUM_STEPPERS){
             error = ERR_INPUT;
             break;
@@ -117,21 +151,21 @@ void readCommands(Stream& input = Serial){
 
       // --- moveby dx dy dz sx [sy sz ix iy iz]
       case 'm': {
-        long dx = readLong(input),
-             dy = readLong(input),
-             dz = readLong(input);
-        unsigned long sx = readULong(input),
-                      sy = readULong(input),
-                      sz = readULong(input),
-                      ix = readULong(input),
-                      iy = readULong(input),
-                      iz = readULong(input);
+        long dx = line.readLong(),
+             dy = line.readLong(),
+             dz = line.readLong();
+        unsigned long sx = line.readULong(),
+                      sy = line.readULong(),
+                      sz = line.readULong(),
+                      ix = line.readULong(),
+                      iy = line.readULong(),
+                      iz = line.readULong();
         if(sx == 0L) sx = HALF_MILLISECOND;
         if(sy == 0L) sy = sx;
         if(sz == 0L) sz = sx;
-        // if(dx) stpX.stepBy(dx, sx, ix);
+        if(dx) stpX.stepBy(dx, sx, ix);
         if(dy) stpY.stepBy(dy, sy, iy);
-        // if(dz) stpZ.stepBy(dz, sz, iz);
+        if(dz) stpZ.stepBy(dz, sz, iz);
       } break;
 
       // --- moveby dy sy iy
@@ -142,9 +176,9 @@ void readCommands(Stream& input = Serial){
         } else {
           stpY.microstep(LOW);
         }
-        long delta = readLong(input);
-        unsigned long speed = readULong(input),
-                      init  = readULong(input);
+        long delta = line.readLong();
+        unsigned long speed = line.readULong(),
+                      init  = line.readULong();
         if(speed == 0L) speed = HALF_MILLISECOND;
         if(delta) stpY.stepBy(delta, speed, init);
       }
@@ -152,18 +186,22 @@ void readCommands(Stream& input = Serial){
       // extrude delta steps init eid
       case 'E':
       case 'e': {
-        if(type == 'e'){
-          stpE0.microstep(HIGH);
-        } else {
-          stpE0.microstep(LOW);
+        char id = line.readChar();
+        if(id == '1'){
+          error = ERR_CMD_UNSUPPORTED;
+          return;
         }
-        long delta = -readLong(input);
-        unsigned long speed = readULong(input),
-                      init  = readULong(input);
+        Stepper &stp = stpE0; // TODO add stpE1
+        if(type == 'e'){
+          stp.microstep(HIGH);
+        } else {
+          stp.microstep(LOW);
+        }
+        long delta = -line.readLong();
+        unsigned long speed = line.readULong(),
+                      init  = line.readULong();
         if(speed == 0L) speed = HALF_MILLISECOND;
-        int id = readInt();
-        if(id == 0) stpE0.stepBy(delta, speed, init);
-        // if(id == 1) stpE1.stepBy(delta, speed, init);
+        stp.stepBy(delta, speed, init);
       } break;
 
       /**
@@ -185,13 +223,14 @@ void readCommands(Stream& input = Serial){
 
       case 'o': {
         // open and execute file
-        int fileID = readInt();
+        int fileID = line.readInt();
         if(fileID > 0){
           File &f = sdcard::open(fileID);
           Serial.print("Opening ");
           Serial.println(f.name());
           
           // TODO execute content
+          processFile(f);
           
           f.close(); // we can close it now
         } else {
@@ -204,11 +243,9 @@ void readCommands(Stream& input = Serial){
         break;
     }
   }
-  // remove any extra
-  Serial.flush();
 }
 
-// Main loop
+///// Processing loop //////////////////////////////////////////
 void loop() {
   // show errors
   logError();
@@ -226,14 +263,67 @@ void loop() {
     for(int i = 0; i < NUM_STEPPERS; ++i){
       steppers[i]->reset();
     }
+    if(errorCallback){
+      errorCallback(error);
+      errorCallback = NULL;
+      return;
+    }
   }
   if(idle()){
-    Serial.println("Idle wait.");
-    delay(1000);
+    // if there is a special callback, do that only
+    if(idleCallback){
+      idleCallback(0);
+      idleCallback = NULL;
+    } else {
+      Serial.println("Idle wait.");
+      delay(1000);
+    }
   }
   readCommands();
+  Serial.flush();
 }
 
+///// File processing //////////////////////////////////////////
+void processFileError(int error){
+  // we stop the file processing
+  File &file = sdcard::currentFile();
+  if(file){
+    Serial.print("Closing ");
+    Serial.println(file.name());
+    file.close();
+  }
 
+  // we remove the idle callback, which effectively
+  // stops the continuous command processing
+  idleCallback = NULL;
+}
 
+void processNextLine(int state = 0){
+  File &file = sdcard::currentFile();
+  if(!file){
+    error = ERR_FILE_UNAVAILABLE;
+    return;
+  } else if(!file.available()){
+    Serial.print("EOF: ");
+    Serial.println(file.name());
+    file.close();
+    return;
+  }
+  idleCallback = processNextLine; // trigger again for next line on next idle time
+  readCommands(file);
+}
+
+void processFile(File &file){
+  if(!file){
+    Serial.println("No file to process!");
+    file.close();
+    return;
+  }
+
+  // TODO global positioning and setup
+
+  // process file lines one by one
+  errorCallback = processFileError;
+  processNextLine();
+}
 

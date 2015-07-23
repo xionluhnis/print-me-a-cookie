@@ -7,7 +7,9 @@ enum ErrorType {
   ERR_NONE  = 0,
   ERR_PARSE = 1,
   ERR_STATE = 2,
-  ERR_INPUT = 3
+  ERR_INPUT = 3,
+  ERR_FILE_UNAVAILABLE = 4,
+  ERR_CMD_UNSUPPORTED  = 5
 };
 
 int error;
@@ -24,6 +26,12 @@ void logError() {
       break;
     case ERR_INPUT:
       Serial.println("Invalid input!");
+      break;
+    case ERR_FILE_UNAVAILABLE:
+      Serial.println("File unavailable!");
+      break;
+    case ERR_CMD_UNSUPPORTED:
+      Serial.println("Command not supported!");
       break;
     case -1:
       return;
