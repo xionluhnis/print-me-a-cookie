@@ -41,9 +41,9 @@ public:
     digitalWrite(en, LOW);  // unlock
     digitalWrite(stp, LOW);
     digitalWrite(dir, LOW);
-    digitalWrite(ms1, LOW);
-    digitalWrite(ms2, LOW);
-    digitalWrite(ms3, LOW);
+    digitalWrite(ms1, HIGH);
+    digitalWrite(ms2, HIGH);
+    digitalWrite(ms3, HIGH);
     digitalWrite(en, HIGH); // lock
     callback = NULL;
   }

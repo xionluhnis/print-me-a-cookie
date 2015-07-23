@@ -225,6 +225,20 @@ void readCommands(Stream& input){
         if(delta) stpX.stepBy(delta, speed, init);
       } break;
 
+      case 'Z':
+      case 'z': {
+        if(type == 'z'){
+          stpZ.microstep(Stepper::MS_1_16);
+        } else {
+          stpZ.microstep(Stepper::MS_1_1);
+        }
+        long delta = command.readLong();
+        unsigned long speed = command.readULong(),
+                      init  = command.readULong();
+        if(speed == 0L) speed = HALF_MILLISECOND;
+        if(delta) stpZ.stepBy(delta, speed, init);
+      } break;
+
       // extrude[X] delta [steps init]
       case 'E':
       case 'e': {
@@ -235,9 +249,9 @@ void readCommands(Stream& input){
         }
         Stepper &stp = stpE0; // TODO add stpE1
         if(type == 'e'){
-          stp.microstep(HIGH);
+          stp.microstep(Stepper::MS_1_16);
         } else {
-          stp.microstep(LOW);
+          stp.microstep(Stepper::MS_1_1);
         }
         long delta = -command.readLong();
         unsigned long speed = command.readULong(),
