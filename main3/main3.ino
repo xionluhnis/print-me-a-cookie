@@ -4,9 +4,6 @@
 #include "stepper.h"
 #include "sdcard.h"
 
-#include <SPI.h>
-#include <SD.h>
-
 // delays in milliseconds
 #define delayFunc delayMicroseconds
 #define DELAY_INTER 100
