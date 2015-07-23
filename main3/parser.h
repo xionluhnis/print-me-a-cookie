@@ -14,7 +14,11 @@ bool isBlankSpace(char c){
 class LineParser {
 public:
 
-  LineParser(Stream &s) : input(&s), last('\0'), valid(true) {}
+  LineParser(Stream &s, LineParser *p = NULL) : input(&s), last('\0'), valid(true), parent(p) {}
+
+  LineParser subline() {
+    return !valid ? *this : LineParser(*input, this);
+  }
 
   bool available(){
     return input->available() && valid;
@@ -23,7 +27,8 @@ public:
   void skip(bool echo = false){
     if(!valid) return;
     while(read()){
-      Serial.print(last);
+      if(echo)
+        Serial.print(last);
     }
   }
 
@@ -124,7 +129,12 @@ protected:
   bool read(){
     if(input->available()){
       last = input->read();
-      if(last == '\n' || last == '\r')
+      if(last == '\n' || last == '\r'){
+        valid = false;
+        if(parent)
+          parent->valid = false;
+      }
+      if(parent && isBreak(last))
         valid = false;
       return valid;
     }
@@ -135,5 +145,6 @@ private:
   Stream *input;
   char last;
   bool valid;
+  LineParser *parent;
 };
 

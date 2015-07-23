@@ -79,7 +79,7 @@ public:
   }
 
   void microstep(byte mode = MS_FULL) {
-    Serial.println("Microstep");
+    // Serial.println("Microstep");
     enable();
     int  ms[] = { ms1, ms2, ms3 };
     byte mask[] = { B100, B010, B001 };
@@ -126,13 +126,13 @@ protected:
   void enable(){
     digitalWrite(en, LOW);
     enabled = true;
-    Serial.println("enable");
+    //Serial.println("enable");
   }
 
   void disable(){
     digitalWrite(en, HIGH);
     enabled = false;
-    Serial.println("disable");
+    //Serial.println("disable");
   }
 
 private:

@@ -1,8 +1,11 @@
 
 #include "error.h"
-#include "types.h"
+#include "parser.h"
 #include "stepper.h"
 #include "sdcard.h"
+
+#include <SPI.h>
+#include <SD.h>
 
 // delays in milliseconds
 #define delayFunc delayMicroseconds
@@ -11,6 +14,7 @@
 #define TENTH_MILLISECOND 1L
 #define HALF_MILLISECOND  5L
 #define MILLISECOND       10L
+#define HALF_SECOND       (500L * MILLISECOND)
 #define SECOND            (1000L * MILLISECOND)
 
 // steppers
@@ -94,28 +98,38 @@ void resetAll(){
 void readCommands(Stream& input){
   LineParser line(input);
   while(line.available() && error <= ERR_NONE){
+    // create a command parser (subline)
+    LineParser command = line.subline();
+    
     // command type depends on first character
-    char type = line.readChar();
+    char type = command.readChar();
+    Serial.print('Command ');
+    Serial.print(type);
+    Serial.print(" (");
+    Serial.print(input.available(), DEC);
+    Serial.println(")");
     switch(type){
 
       // --- line comment
       case '#': {
         Serial.print("#");
-        line.skip(true);
+        line.skip(true); // we skip the full line
+        Serial.println("");
       } break;
 
       // --- new line
       case '\n':
       case '\r':
+        Serial.println("Newline");
         return;
       
       // --- sX where X = pin delta speed init
       case 's': {
-        if(line.available()){
-          int pin = line.readInt();
-          unsigned long moves = line.readLong();
-          unsigned long steps = line.readLong();
-          unsigned long count = line.readLong();
+        if(command.available()){
+          int pin = command.readInt();
+          unsigned long moves = command.readLong();
+          unsigned long steps = command.readLong();
+          unsigned long count = command.readLong();
           if(steps == 0){
             steps = HALF_MILLISECOND;
           }
@@ -136,27 +150,44 @@ void readCommands(Stream& input){
       // --- microstepping mode
       case '+':
       case '-': {
-        if(line.available()){
-          int pin = line.readInt();
-          if(pin < 0 || pin >= NUM_STEPPERS){
-            error = ERR_INPUT;
-            break;
+        if(command.available()){
+          char c = command.readChar();
+          while(isBlankSpace(c))
+            c = command.readChar();
+          Stepper *stp = NULL;
+          switch(c){
+            case 'x':
+            case 'X':
+              stp = &stpX;
+              break;
+            case 'y':
+            case 'Y':
+              stp = &stpY;
+              break;
+            case 'z':
+            case 'Z':
+              stp = &stpZ;
+              break;
+            default:
+              error = ERR_INPUT;
+              return;
           }
-          steppers[pin]->microstep(type == '+' ? Stepper::MS_FULL : Stepper::MS_1_16);
+          if(stp)
+            stp->microstep(type == '+' ? Stepper::MS_FULL : Stepper::MS_1_16);
         }
       } break;
 
       // --- moveby dx dy dz sx [sy sz ix iy iz]
       case 'm': {
-        long dx = line.readLong(),
-             dy = line.readLong(),
-             dz = line.readLong();
-        unsigned long sx = line.readULong(),
-                      sy = line.readULong(),
-                      sz = line.readULong(),
-                      ix = line.readULong(),
-                      iy = line.readULong(),
-                      iz = line.readULong();
+        long dx = command.readLong(),
+             dy = command.readLong(),
+             dz = command.readLong();
+        unsigned long sx = command.readULong(),
+                      sy = command.readULong(),
+                      sz = command.readULong(),
+                      ix = command.readULong(),
+                      iy = command.readULong(),
+                      iz = command.readULong();
         if(sx == 0L) sx = HALF_MILLISECOND;
         if(sy == 0L) sy = sx;
         if(sz == 0L) sz = sx;
@@ -165,25 +196,39 @@ void readCommands(Stream& input){
         if(dz) stpZ.stepBy(dz, sz, iz);
       } break;
 
-      // --- moveby dy sy iy
+      // --- moveby dy [sy iy]
       case 'Y':
       case 'y': {
         if(type == 'y'){
-          stpY.microstep(HIGH);
+          stpY.microstep(Stepper::MS_1_16);
         } else {
-          stpY.microstep(LOW);
+          stpY.microstep(Stepper::MS_1_1);
         }
-        long delta = line.readLong();
-        unsigned long speed = line.readULong(),
-                      init  = line.readULong();
+        long delta = command.readLong();
+        unsigned long speed = command.readULong(),
+                      init  = command.readULong();
         if(speed == 0L) speed = HALF_MILLISECOND;
         if(delta) stpY.stepBy(delta, speed, init);
-      }
+      } break;
 
-      // extrude delta steps init eid
+      case 'X':
+      case 'x': {
+        if(type == 'x'){
+          stpX.microstep(Stepper::MS_1_16);
+        } else {
+          stpX.microstep(Stepper::MS_1_1);
+        }
+        long delta = command.readLong();
+        unsigned long speed = command.readULong(),
+                      init  = command.readULong();
+        if(speed == 0L) speed = HALF_MILLISECOND;
+        if(delta) stpX.stepBy(delta, speed, init);
+      } break;
+
+      // extrude[X] delta [steps init]
       case 'E':
       case 'e': {
-        char id = line.readChar();
+        char id = command.readChar();
         if(id == '1'){
           error = ERR_CMD_UNSUPPORTED;
           return;
@@ -194,11 +239,29 @@ void readCommands(Stream& input){
         } else {
           stp.microstep(LOW);
         }
-        long delta = -line.readLong();
-        unsigned long speed = line.readULong(),
-                      init  = line.readULong();
+        long delta = -command.readLong();
+        unsigned long speed = command.readULong(),
+                      init  = command.readULong();
         if(speed == 0L) speed = HALF_MILLISECOND;
         stp.stepBy(delta, speed, init);
+      } break;
+
+      // wait [time]
+      case 'W':
+      case 'w': {
+        int time = command.readInt();
+        if(!time){
+          if(type == 'W')
+            time = HALF_SECOND;
+          else
+            time = HALF_MILLISECOND;
+        } else {
+          if(type == 'W')
+            time *= SECOND;
+          else
+            time *= MILLISECOND;
+        }
+        delayFunc(time);
       } break;
 
       /**
@@ -220,7 +283,7 @@ void readCommands(Stream& input){
 
       case 'o': {
         // open and execute file
-        int fileID = line.readInt();
+        int fileID = command.readInt();
         if(fileID > 0){
           File &f = sdcard::open(fileID);
           Serial.print("Opening ");
@@ -229,7 +292,6 @@ void readCommands(Stream& input){
           // TODO execute content
           processFile(f);
           
-          f.close(); // we can close it now
         } else {
           Serial.println("File ID must be strictly positive.");
         }
@@ -269,8 +331,9 @@ void loop() {
   if(idle()){
     // if there is a special callback, do that only
     if(idleCallback){
-      idleCallback(0);
+      Callback cb = idleCallback;
       idleCallback = NULL;
+      cb(0);
     } else {
       Serial.println("Idle wait.");
       delay(1000);
@@ -297,6 +360,9 @@ void processFileError(int error){
 
 void processNextLine(int state = 0){
   File &file = sdcard::currentFile();
+  Serial.print("Next line of ");
+  Serial.println(file.name());
+  Serial.println(file.available(), DEC);
   if(!file){
     error = ERR_FILE_UNAVAILABLE;
     return;
