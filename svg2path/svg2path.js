@@ -43,9 +43,9 @@
  	m_command: function(dx, dy, dz, sx, sy, sz){
  		if(!dz) dz = 0;
  		this.code += 'm ' + dx + ' ' + dy + ' ' + dz;
- 		if(sx) code += ' ' + sx;
- 		if(sy) code += ' ' + sy;
- 		if(sz) code += ' ' + sz;
+ 		if(sx) this.code += ' ' + sx;
+ 		if(sy) this.code += ' ' + sy;
+ 		if(sz) this.code += ' ' + sz;
  	},
  	
 // javascript commands
@@ -53,7 +53,11 @@
  		var newPos = new Point(this.context.tx, this.context.ty);
  		var delta = newPos.sub(this.lastPos).round();
  		if(delta.x != 0 || delta.y != 0){
- 			this.m_command(delta.x, delta.y);
+ 			var adelta = delta.abs();
+ 			var deltaMax = Math.max(adelta.x, adelta.y);
+ 			var sx = Math.ceil(deltaMax / Math.max(adelta.x, 5) * 5);
+ 			var sy = Math.ceil(deltaMax / Math.max(adelta.y, 5) * 5);
+ 			this.m_command(delta.x, delta.y, 0, sx, sy);
  			this.lastPos = newPos;
  		}
  		return this;
@@ -72,19 +76,19 @@
  		if(speed) this.code += ' ' + speed;
  		return this;
  	},
-  wait: function(t){
-    if(!t) t = 500;
-    this.code += 'w ' + t;
-    return this;
-  },
+ 	wait: function(t){
+ 		if(!t) t = 500;
+ 		this.code += 'w ' + t;
+ 		return this;
+ 	},
  	lineBy: function(x, y){
  		var pos = this.lastPos;
  		this.moveBy(x, y).and();
  		var delta = this.lastPos.sub(pos).abs();
  		var speed = Math.ceil(Math.max(delta.x, delta.y) / 2);
  		this.extrude(speed, 10)
-        .then()
-        .wait();
+ 			.then()
+ 			.wait();
  		return this;
  	},
  	lineTo: function(x, y){
@@ -93,8 +97,8 @@
  		var delta = this.lastPos.sub(pos).abs();
  		var speed = Math.ceil(Math.max(delta.x, delta.y) / 2);
  		this.extrude(speed, 10)
-        .then()
-        .wait();
+ 			.then()
+ 			.wait();
  		return this;
  	},
  	and: function(){
