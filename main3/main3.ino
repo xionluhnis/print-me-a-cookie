@@ -263,7 +263,8 @@ void readCommands(Stream& input){
       // wait [time]
       case 'W':
       case 'w': {
-        int time = command.readInt();
+        unsigned long time = command.readULong();
+        Serial.println(time, DEC);
         if(!time){
           if(type == 'W')
             time = HALF_SECOND;
@@ -275,7 +276,13 @@ void readCommands(Stream& input){
           else
             time *= MILLISECOND;
         }
-        delayFunc(time);
+        Serial.println(time, DEC);
+        if(time*DELAY_INTER > 15000L){
+          delay(time * DELAY_INTER / 1000L);
+        }
+        else{
+          delayFunc(time * DELAY_INTER);
+        }
       } break;
 
       /**
@@ -403,4 +410,3 @@ void processFile(File &file){
   errorCallback = processFileError;
   processNextLine();
 }
-
