@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>SVG to Path</title>
+		<meta charset="utf-8">
+		<style>
+		header {
+			position: absolute;
+			top: 0px;
+			left: 0px;
+			width: 100%;
+			height: auto;
+			background: #ddd;
+			border-bottom: 2px solid #ddd;
+		}
+		header input[type=file] {
+			height: 3em;
+			line-height: 3em;
+			margin: 0;
+			padding: 1em;
+			background: #ddd;
+		}
+		header input[type=number] {
+			height: 2.5em;
+		}
+		header label {
+			font-weight: bold;
+			color: gray;
+		}
+		header button#save {
+			position: absolute;
+			right: 0;
+			top: 0;
+			margin: .7em;
+			height: 3.5em;
+			border: 2px solid white;
+			background: #ff99cc;
+			border-radius: 50px;
+			font-weight: bold;
+			color: white;
+			cursor: pointer;
+			opacity: 0.7;
+		}
+		header button#save:hover {
+			box-shadow: 0px 0px 10px white;
+			opacity: 1.0;
+		}
+		#left, #right {
+			position: absolute;
+			width: 50%;
+			top: 4.2em;
+			min-height: 100px;
+			border-top: 2px solid #ddd;
+			border-bottom: 2px solid #ddd;
+		}
+		#left {
+			left: 0px;
+			border-right: 1px solid #ddd;
+		}
+		#right {
+			right: 0px;
+			border-left: 1px solid #ddd;
+			min-height: 400px;
+			white-space: pre-line;
+		}
+		#image, #svg {
+			width: 100%;
+			min-height: 200px;
+		}
+		#image {
+			background: #ffeded;
+		}
+		#svg {
+			background: #f4f4f4;
+		}
+		#image, #svg, #right {
+			box-sizing: padding-box;
+			padding: 20px;
+			color: gray;
+		}
+		#image img {
+			width: 100%;
+		}
+		#svg {
+			overflow: auto;
+		}
+		#data {
+			display: none;
+		}
+		</style>
+	</head>
+	<body>
+		<header>
+			<input type="file" id="files"></input>
+			<label for="scale">Scale: </label>
+			<input type="number" id="scale" value="100" />
+			<button id="save">Save</button>
+		</header>
+		<div id="left">
+			<div id="image">
+				<img />
+			</div>
+			<div id="svg">
+				<pre>No SVG code.</pre>
+			</div>
+		</div>
+		<div id="right">
+			No path code.
+		</div>
+		<div id="data">
+			
+		</div>
+		<script type="text/javascript" src="jquery.min.js"></script>
+		<script type="text/javascript" src="urlexport.js"></script>
+		<script type="text/javascript" src="point.js"></script>
+		<script type="text/javascript" src="matrix.js"></script>
+		<script type="text/javascript" src="svg2path.js"></script>
+		<script type="text/javascript">
+			var fileName = 'code';
+			function resetCode(){
+				console.log('reset');
+				var svg = $('#data svg');
+				var scale = parseFloat($('#scale').val());
+				if(svg.length){
+					var code = svg2path(svg, scale);
+					$('#right').text(code);
+				}
+			}
+		
+			function loadFile(event){
+				var files = event.target.files;
+				if(files.length == 0){
+					return;
+				}
+				var f = files[0];
+				if(!f.type.match('image/svg*')){
+					return;
+				}
+				fileName = f.name.replace(/\..*$/, '');
+				console.log('File type: ' + f.type);
+				
+				// load first file
+				var reader = new FileReader();
+				reader.onload = function(ev){
+					$('#image img').attr('src', ev.target.result).text('');
+				};
+				reader.readAsDataURL(f);
+				
+				var svg = new FileReader();
+				svg.onload = function(ev){
+					$('#svg pre').text(ev.target.result);
+					$('#data').html(ev.target.result);
+					resetCode();
+				};
+				svg.readAsText(f);
+			}
+			
+			function saveFile(){
+				var content = $('#right').html();
+				exportString(fileName + '.pth', content);
+			}
+			
+			$(function(){
+				$('#files').on('change', loadFile);
+				$('#scale').on('change keyup', resetCode);
+				$('#save').on('click', saveFile);
+			});
+		</script>
+	</body>
+</html>
