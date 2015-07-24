@@ -72,18 +72,29 @@
  		if(speed) this.code += ' ' + speed;
  		return this;
  	},
+  wait: function(t){
+    if(!t) t = 500;
+    this.code += 'w ' + t;
+    return this;
+  },
  	lineBy: function(x, y){
  		var pos = this.lastPos;
  		this.moveBy(x, y).and();
  		var delta = this.lastPos.sub(pos).abs();
- 		this.extrude(Math.max(delta.x, delta.y));
+ 		var speed = Math.ceil(Math.max(delta.x, delta.y) / 2);
+ 		this.extrude(speed, 10)
+        .then()
+        .wait();
  		return this;
  	},
  	lineTo: function(x, y){
  		var pos = this.lastPos;
  		this.moveTo(x, y).and();
  		var delta = this.lastPos.sub(pos).abs();
- 		this.extrude(Math.max(delta.x, delta.y));
+ 		var speed = Math.ceil(Math.max(delta.x, delta.y) / 2);
+ 		this.extrude(speed, 10)
+        .then()
+        .wait();
  		return this;
  	},
  	and: function(){

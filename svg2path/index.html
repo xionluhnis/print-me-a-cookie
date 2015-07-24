@@ -78,14 +78,27 @@
 			padding: 20px;
 			color: gray;
 		}
-		#image img {
+		#image > * {
 			width: 100%;
+		}
+		#image svg path, #image svg rect {
+			stroke-dasharray: 1000;
+			  stroke-dashoffset: 1000;
+			  animation: dash 5s linear alternate infinite;
 		}
 		#svg {
 			overflow: auto;
 		}
 		#data {
 			display: none;
+		}
+		@keyframes dash {
+		  from {
+			stroke-dashoffset: 3000;
+		  }
+		  to {
+			stroke-dashoffset: 0;
+		  }
 		}
 		</style>
 	</head>
@@ -142,12 +155,13 @@
 				// load first file
 				var reader = new FileReader();
 				reader.onload = function(ev){
-					$('#image img').attr('src', ev.target.result).text('');
+					// $('#image img').attr('src', ev.target.result).text('');
 				};
 				reader.readAsDataURL(f);
 				
 				var svg = new FileReader();
 				svg.onload = function(ev){
+					$('#image').html(ev.target.result);
 					$('#svg pre').text(ev.target.result);
 					$('#data').html(ev.target.result);
 					resetCode();
