@@ -125,7 +125,7 @@
  	
  	// frame
  	var dec = function(v){
- 		return Math.ceil(parseFloat(v) * scale);
+ 		return Math.round(parseFloat(v) * scale);
  	};
  	var coord = function(node, val){
  		return dec(node.attr(val));
@@ -134,7 +134,17 @@
  	var parse = {
  		transform: function(node) {
  			path.storeContext();
- 			// TODO change context matrix
+ 			// change context matrix
+ 			var T = node.prop('transform');
+ 			if(!T || !T.baseVal)
+ 				return;
+ 			for(var i = 0; i < T.baseVal.length; ++i){
+ 				var m = T.baseVal[i].matrix;
+ 				var M = new Matrix(
+ 					m.a, m.b, m.c, m.d, m.e, m.f
+ 				);
+ 				path.context = path.context.concat(M);
+ 			}
  		},
  		untransform: function() {
  			path.releaseContext();
@@ -150,12 +160,14 @@
  			var w = coord(node, 'width');
  			var h = coord(node, 'height');
  			path.comment('rect ' + x + ' ' + y + ' ' + w + ' ' + h);
- 			path.moveTo(x, y)
+ 			path.storeContext();
+ 			path.moveBy(x, y)
  			 	.then().lineBy(w, 0)
  			 	.then().lineBy(0, h)
  			 	.then().lineBy(-w, 0)
  			 	.then().lineBy(0, -h)
  			 	.end();
+ 			path.releaseContext();
  		},
  		circ: function(node){
  			path.comment('circ');
