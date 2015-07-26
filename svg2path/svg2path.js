@@ -9,7 +9,9 @@
  	
  	// geometry context
  	this.context = new Matrix();
- 	this.lastPos = new Point(0, 0);
+ 	this.lastLoc = new Point(0, 0); // absolute location (no context)
+ 	this.relPos = new Point(0, 0);  // context-dependent relative position
+ 	this.lastCtrl = null; // last control point
  	
  	// stacks
  	this.contextStack = [];
@@ -20,6 +22,7 @@
  // context and stacks
  	storeContext: function(){
  		this.contextStack.push(this.context.clone());
+ 		this.relPos = new Point(0, 0); // this value is not well defined when changing context
  	},
  	releaseContext: function(){
  		this.context = this.contextStack.pop();
@@ -34,9 +37,14 @@
  		this.code = this.codeStack.pop();
  	},
  	
+// utils
+	project: function(p, c){
+		return new Point(2 * c.x - p.x, 2 * c.y - p.y);
+	},
+ 	
 // getter command
 	currentPos: function(){
-		return new Point(this.context.tx, this.context.ty);
+		return this.relPos;
 	},
  	
 // path commands
@@ -47,28 +55,36 @@
  		if(sy) this.code += ' ' + sy;
  		if(sz) this.code += ' ' + sz;
  	},
+
  	
 // javascript commands
 	shift: function(){
- 		var newPos = new Point(this.context.tx, this.context.ty);
- 		var delta = newPos.sub(this.lastPos).round();
+ 		var newLoc = this.context.transformPoint(this.relPos); // compute new absolute location
+ 		var delta = newLoc.sub(this.lastLoc).round(); 		   // compute relative shift in absolute location
  		if(delta.x != 0 || delta.y != 0){
  			var adelta = delta.abs();
  			var deltaMax = Math.max(adelta.x, adelta.y);
  			var sx = Math.ceil(deltaMax / Math.max(adelta.x, 5) * 5);
  			var sy = Math.ceil(deltaMax / Math.max(adelta.y, 5) * 5);
  			this.m_command(delta.x, delta.y, 0, sx, sy);
- 			this.lastPos = newPos;
+ 			this.lastLoc = newLoc;
  		}
  		return this;
  	},
+ 	cubic: function(c1, c2){
+ 		// TODO implement (with Arduino first!)
+ 	},
+ 	quad: function(c){
+ 		// TODO implement (with Arduino first!)
+ 	},
  	moveBy: function(x, y){
- 		this.context = this.context.translate(x, y);
+ 		this.relPos = this.relPos.translate(x, y);
+ 		this.lastCtrl = null;
  		return this.shift();
  	},
  	moveTo: function(x, y){
- 		this.context.tx = x;
- 		this.context.ty = y;
+ 		this.relPos = new Point(x, y);
+ 		this.lastCtrl = null;
  		return this.shift();
  	},
  	extrude: function(delta, speed){
@@ -82,9 +98,9 @@
  		return this;
  	},
  	lineBy: function(x, y){
- 		var pos = this.lastPos;
+ 		var loc = this.lastLoc;
  		this.moveBy(x, y).and();
- 		var delta = this.lastPos.sub(pos).abs();
+ 		var delta = this.lastLoc.sub(loc).abs();
  		var speed = Math.ceil(Math.max(delta.x, delta.y) / 2);
  		this.extrude(speed, 10)
  			.then()
@@ -92,14 +108,68 @@
  		return this;
  	},
  	lineTo: function(x, y){
- 		var pos = this.lastPos;
+ 		var loc = this.lastLoc;
  		this.moveTo(x, y).and();
- 		var delta = this.lastPos.sub(pos).abs();
+ 		var delta = this.lastLoc.sub(loc).abs();
  		var speed = Math.ceil(Math.max(delta.x, delta.y) / 2);
  		this.extrude(speed, 10)
  			.then()
  			.wait();
  		return this;
+ 	},
+ 	curveBy: function(c1x, c1y, c2x, c2y, x, y){
+ 		var dx = this.relPos.x; var dy = this.relPos.y;
+ 		return this.curveTo(c1x + dx, c1y + dy, c2x + dx, c2y + dy, x + dx, y + dy);
+ 	},
+ 	curveTo: function(c1x, c1y, c2x, c2y, x, y){
+ 		// TODO implement cubic bezier
+ 		this.comment("curveTo: not implemented yet");
+ 		// extrude for duration
+ 		
+ 		// set new relative point
+ 		this.relPos = new Point(x, y);
+ 		this.lastCtrl = new Point(c2x, c2y);
+ 		return this;
+ 	},
+ 	smoothCurveBy: function(c2x, c2y, x, y){
+ 		var dx = this.relPos.x; var dy = this.relPos.y;
+ 		return this.smoothCurveTo(c2x + dx, c2y + dx, x + dx, y + dy);
+ 	},
+ 	smoothCurveTo: function(c2x, c2y, x, y){
+ 		var c1 = null;
+ 		if(this.lastCtrl){
+ 			c1 = this.project(this.lastCtrl, this.relPos);
+ 		} else {
+ 			c1 = this.relPos;
+ 		}
+ 		return this.curveTo(c1.x, c1.y, c2x, c2y, x, y);
+ 	},
+ 	quadBy: function(cx, cy, x, y){
+ 		var dx = this.relPos.x; var dy = this.relPos.y;
+ 		return this.quadTo(cx + dx, cy + dy, x + dx, y + dy);
+ 	},
+ 	quadTo: function(cx, cy, x, y){
+ 		// TODO implement quadratic bezier
+ 		this.comment("quadTo: not implemented yet");
+ 		// extrude for duration
+ 		
+ 		// set new relative point
+ 		this.relPos = new Point(x, y);
+ 		this.lastCtrl = new Point(cx, cy);
+ 		return this;
+ 	},
+ 	smoothQuadBy: function(x, y){
+ 		var dx = this.relPos.x; var dy = this.relPos.y;
+ 		return this.smoothQuadTo(x + dx, y + dy);
+ 	},
+ 	smoothQuadTo: function(x, y){
+ 		var c = null;
+ 		if(this.lastCtrl){
+ 			c = this.project(this.lastCtrl, this.relPos);
+ 		} else {
+ 			c = this.relPos;
+ 		}
+ 		return this.quadTo(c.x, c.y, x, y);
  	},
  	and: function(){
  		this.code += ', ';
@@ -160,14 +230,12 @@
  			var w = coord(node, 'width');
  			var h = coord(node, 'height');
  			path.comment('rect ' + x + ' ' + y + ' ' + w + ' ' + h);
- 			path.storeContext();
- 			path.moveBy(x, y)
+ 			path.moveTo(x, y)
  			 	.then().lineBy(w, 0)
  			 	.then().lineBy(0, h)
  			 	.then().lineBy(-w, 0)
  			 	.then().lineBy(0, -h)
  			 	.end();
- 			path.releaseContext();
  		},
  		circ: function(node){
  			path.comment('circ');
@@ -176,11 +244,14 @@
  			path.comment('path');
  			// stack for error cases
  			var error = false;
- 			path.storeContext();
  			path.storeCode();
  			
  			// process path
- 			var data = node.attr('d').replace(/[, ]+/g, ' ');
+ 			var data = node.attr('d').replace(/[a-zA-Z]/, function(x){
+ 				return ' ' + x + ' '; // isolate command letters
+ 			}).trim() // remove heading and trailing spaces
+ 			  .replace(/[, ]+/g, ' '); // remove duplicate spaces, replace commas
+ 			path.comment('Data: ' + data);
  			var firstPos = null;
  			var mode = null;
  			var tokens = data.split(' ');
@@ -192,6 +263,16 @@
  					case 'M':
  					case 'l':
  					case 'L':
+ 					case 'c':
+ 					case 'C':
+ 					case 's':
+ 					case 'S':
+ 					case 'q':
+ 					case 'Q':
+ 					case 't':
+ 					case 'T':
+ 					case 'a':
+ 					case 'A':
  						mode = tokens[i];
  						++i;
  						break;
@@ -200,16 +281,37 @@
  						++i;
  						break;
  					default:
- 						var pos = new Point(dec(tokens[i]), dec(tokens[i+1]));
+ 						var pos = new Point(dec(tokens[i]), dec(tokens[i+1])), q1, q2;
  						if(isNaN(pos.x) || isNaN(pos.y)){
- 							console.log('Invalid position');
+ 							console.log('Invalid position: ' + tokens[i] + ',' + tokens[i+1]);
+ 							error = true;
  						}
+ 						// potential control points
+						q1 = new Point(dec(tokens[i+2]), dec(tokens[i+3])); // /!\ this may be invalid!
+						q2 = new Point(dec(tokens[i+4]), dec(tokens[i+5])); //     same here...
+						// always shift at least by 2
  						i += 2;
  						switch(mode){
+ 							// move
  							case 'm': path.moveBy(pos.x, pos.y).end(); if(!firstPos) mode = 'L'; break;
  							case 'M': path.moveTo(pos.x, pos.y).end(); if(!firstPos) mode = 'L'; break;
+ 							// line
  							case 'l': path.lineBy(pos.x, pos.y).end(); break;
  							case 'L': path.lineTo(pos.x, pos.y).end(); break;
+ 							// cubic bezier
+ 							case 'C': path.curveTo(pos.x, pos.y, q1.x, q1.y, q2.x, q2.y).end(); break;
+ 							case 'c': path.curveBy(pos.x, pos.y, q1.x, q1.y, q2.x, q2.y).end(); break;
+ 							case 'S': path.smoothCurveTo(pos.x, pos.y, q1.x, q1.y).end(); break;
+ 							case 's': path.smoothCurveBy(pos.x, pos.y, q1.x, q1.y).end(); break;
+ 							// quadratic bezier
+ 							case 'Q': path.quadTo(pos.x, pos.y, q1.x, q1.y).end(); break;
+ 							case 'q': path.quadBy(pos.x, pos.y, q1.x, q1.y).end(); break;
+ 							case 'T': path.smoothQuadTo(pos.x, pos.y).end(); break;
+ 							case 't': path.smoothQuadBy(pos.x, pos.y).end(); break;
+ 							// elliptical arc
+ 							case 'A':
+ 							case 'a': // @see http://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
+ 							// invalid mode
  							default:
  								// not supported
  								console.log("Path command '" + mode + "' not supported!");
@@ -217,7 +319,7 @@
  								break;
  						}
  						if(!firstPos){
- 							firstPos = path.currentPos();
+ 							firstPos = path.currentPos(); // /!\ context position, not real location
  						}
  						break;
  				}
@@ -228,7 +330,45 @@
  			} else {
  				path.releaseCode();
  			}
- 			path.releaseContext();
+ 		},
+ 		polygon: function(node){
+ 			return parse.polyline(node, true);
+ 		},
+ 		polyline: function(node, polygon){
+ 			path.comment(polygon ? 'Polygon' : 'Polyline');
+ 			
+ 			// stack for error cases
+ 			var error = false;
+ 			path.storeCode();
+ 			
+ 			var tokens = node.attr('points').replace(/[, ]+/g, ' ').trim().split(' ');
+ 			var last = null;
+ 			if(tokens.length % 2){
+ 				console.log('Odd polyline data!');
+ 				error = true;
+ 			}
+ 			var firstPos = null;
+ 			for(var i = 0; i < tokens.length && !error; i += 2){
+ 				var pos = new Point(dec(tokens[i]), dec(tokens[i+1]));
+				if(isNaN(pos.x) || isNaN(pos.y)){
+					console.log('Invalid position: ' + tokens[i] + ',' + tokens[i+1]);
+					error = true;
+				}
+				if(i == 0){
+					firstPos = pos;
+					path.moveTo(pos.x, pos.y);
+ 				}else
+ 					path.lineTo(pos.x, pos.y);
+ 			}
+ 			// close polygon
+ 			if(polygon && !error){
+ 				path.lineTo(firstPos.x, firstPos.y);
+ 			}
+ 			if(error){
+ 				path.restoreCode();
+ 			} else {
+ 				path.releaseCode();
+ 			}
  		},
  		child: function(node){
  			var tag = node.prop('tagName').toLowerCase();
