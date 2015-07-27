@@ -41,6 +41,20 @@
 	project: function(p, c){
 		return new Point(2 * c.x - p.x, 2 * c.y - p.y);
 	},
+	bezierSamples: function(p1, c1, c2, p2){
+ 		var cubic = !!p2;
+ 		if(!c2){
+ 			console.log("Calling bezierSamples with too few arguments!");
+ 		}
+ 		var curve = cubic ? new Bezier([p1, c1, c2, p2]) : new Bezier([p1, c1, c2]);
+ 		var len = curve.length();
+ 		var N = Math.max(5, Math.ceil(len / 16.0));
+ 		return {
+ 			curve: curve,
+ 			length: len,
+ 			points: curve.getLUT(N)
+ 		};
+ 	},
  	
 // getter command
 	currentPos: function(){
@@ -70,12 +84,6 @@
  			this.lastLoc = newLoc;
  		}
  		return this;
- 	},
- 	cubic: function(c1, c2){
- 		// TODO implement (with Arduino first!)
- 	},
- 	quad: function(c){
- 		// TODO implement (with Arduino first!)
  	},
  	moveBy: function(x, y){
  		this.relPos = this.relPos.translate(x, y);
@@ -122,10 +130,19 @@
  		return this.curveTo(c1x + dx, c1y + dy, c2x + dx, c2y + dy, x + dx, y + dy);
  	},
  	curveTo: function(c1x, c1y, c2x, c2y, x, y){
- 		// TODO implement cubic bezier
- 		this.comment("curveTo: not implemented yet");
- 		// extrude for duration
- 		
+ 		// discretize
+ 		var data = this.bezierSamples(
+ 			new Point(this.relPos.x, this.relPos.y),
+ 			new Point(c1x, c1y),
+ 			new Point(c2x, c2y),
+ 			new Point(x, y)
+ 		);
+ 		this.comment("curveTo: len=" + data.length + ", N=" + data.points.length);
+ 		// draw segments
+ 		for(var i = 1; i < data.points.length; ++i){
+ 			this.lineTo(data.points[i].x, data.points[i].y);
+ 			if(i < data.points.length - 1) this.end();
+ 		}
  		// set new relative point
  		this.relPos = new Point(x, y);
  		this.lastCtrl = new Point(c2x, c2y);
@@ -149,10 +166,18 @@
  		return this.quadTo(cx + dx, cy + dy, x + dx, y + dy);
  	},
  	quadTo: function(cx, cy, x, y){
- 		// TODO implement quadratic bezier
- 		this.comment("quadTo: not implemented yet");
- 		// extrude for duration
- 		
+ 		// discretize
+ 		var data = this.bezierSamples(
+ 			new Point(this.relPos.x, this.relPos.y),
+ 			new Point(cx, cy),
+ 			new Point(x, y)
+ 		);
+ 		this.comment("quadTo: len=" + data.length + ", N=" + data.points.length);
+ 		// draw segments
+ 		for(var i = 1; i < data.points.length; ++i){
+ 			this.lineTo(data.points[i].x, data.points[i].y);
+ 			if(i < data.points.length - 1) this.end();
+ 		}
  		// set new relative point
  		this.relPos = new Point(x, y);
  		this.lastCtrl = new Point(cx, cy);
