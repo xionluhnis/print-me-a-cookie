@@ -20,9 +20,20 @@ command 2 # serial
 command 3, command 4, ... # parallel
 ```
 
-## Commands (to implement)
+## Available Arduino commands
 
 * `u pin microstep` - set the microstep mode for a stepper motor
-* `s pin delta speed init` - step for delta steps at a given speed
-* `m x y z sx [sy sz ix iy iz]` - move in x/y/z at a given speed
+* `p pin delta [speed init]` - step for delta steps at a given speed
+* `m x y z [sx sy sz ix iy iz]` - move in x/y/z at a given speed
+* `e delta [speed init]` - extrude for delta steps at a given speed
+* `w [time]` - wait for a specific amount of time (ms for lowercase, s for uppercase)
 
+Each stepper motor can be stepped using its corresponding pin command such as
+```
+x 1000 10 # steps in x for 1000 steps every 10 time steps
+y 1000 10 # steps in y for 1000 steps every 10 time steps
+z -1000 1 # steps in z for 1000 reversed steps every time step
+
+## Path program
+
+See Svg2path.

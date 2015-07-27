@@ -46,13 +46,20 @@
  		if(!c2){
  			console.log("Calling bezierSamples with too few arguments!");
  		}
+ 		// 1 = create bezier curve
  		var curve = cubic ? new Bezier([p1, c1, c2, p2]) : new Bezier([p1, c1, c2]);
+ 		// 2 = sample points
  		var len = curve.length();
  		var N = Math.max(5, Math.ceil(len / 16.0));
+ 		var origPoints = curve.getLUT(N);
+ 		// 3 = simplify polyline
+ 		var tolerance = 1.0;
+ 		var points = simplify(origPoints, tolerance, true);
+ 		// done! be happy!
  		return {
  			curve: curve,
  			length: len,
- 			points: curve.getLUT(N)
+ 			points: points
  		};
  	},
  	
@@ -86,9 +93,7 @@
  		return this;
  	},
  	moveBy: function(x, y){
- 		this.relPos = this.relPos.translate(x, y);
- 		this.lastCtrl = null;
- 		return this.shift();
+ 		return this.moveTo(this.relPos.x + x, this.relPos.y + y);
  	},
  	moveTo: function(x, y){
  		this.relPos = new Point(x, y);
@@ -106,24 +111,18 @@
  		return this;
  	},
  	lineBy: function(x, y){
- 		var loc = this.lastLoc;
- 		this.moveBy(x, y).and();
- 		var delta = this.lastLoc.sub(loc).abs();
- 		var speed = Math.ceil(Math.max(delta.x, delta.y) / 2);
- 		this.extrude(speed, 10)
- 			.then()
- 			.wait();
- 		return this;
+ 		return this.lineTo(this.relPos.x + x, this.relPos.y + y);
  	},
- 	lineTo: function(x, y){
+ 	_lineTo: function(x, y){
  		var loc = this.lastLoc;
  		this.moveTo(x, y).and();
  		var delta = this.lastLoc.sub(loc).abs();
  		var speed = Math.ceil(Math.max(delta.x, delta.y) / 2);
- 		this.extrude(speed, 10)
- 			.then()
- 			.wait();
+ 		this.extrude(speed, 10).end();
  		return this;
+ 	},
+ 	lineTo: function(x, y){
+ 		return this._lineTo(x, y).then().wait();
  	},
  	curveBy: function(c1x, c1y, c2x, c2y, x, y){
  		var dx = this.relPos.x; var dy = this.relPos.y;
@@ -140,8 +139,7 @@
  		this.comment("curveTo: len=" + data.length + ", N=" + data.points.length);
  		// draw segments
  		for(var i = 1; i < data.points.length; ++i){
- 			this.lineTo(data.points[i].x, data.points[i].y);
- 			if(i < data.points.length - 1) this.end();
+ 			this._lineTo(data.points[i].x, data.points[i].y);
  		}
  		// set new relative point
  		this.relPos = new Point(x, y);
@@ -175,8 +173,7 @@
  		this.comment("quadTo: len=" + data.length + ", N=" + data.points.length);
  		// draw segments
  		for(var i = 1; i < data.points.length; ++i){
- 			this.lineTo(data.points[i].x, data.points[i].y);
- 			if(i < data.points.length - 1) this.end();
+ 			this._lineTo(data.points[i].x, data.points[i].y);
  		}
  		// set new relative point
  		this.relPos = new Point(x, y);
@@ -324,13 +321,13 @@
  							case 'l': path.lineBy(pos.x, pos.y).end(); break;
  							case 'L': path.lineTo(pos.x, pos.y).end(); break;
  							// cubic bezier
- 							case 'C': path.curveTo(pos.x, pos.y, q1.x, q1.y, q2.x, q2.y).end(); break;
- 							case 'c': path.curveBy(pos.x, pos.y, q1.x, q1.y, q2.x, q2.y).end(); break;
- 							case 'S': path.smoothCurveTo(pos.x, pos.y, q1.x, q1.y).end(); break;
- 							case 's': path.smoothCurveBy(pos.x, pos.y, q1.x, q1.y).end(); break;
+ 							case 'C': path.curveTo(pos.x, pos.y, q1.x, q1.y, q2.x, q2.y).end(); i += 4; break;
+ 							case 'c': path.curveBy(pos.x, pos.y, q1.x, q1.y, q2.x, q2.y).end(); i += 4; break;
+ 							case 'S': path.smoothCurveTo(pos.x, pos.y, q1.x, q1.y).end(); i += 2; break;
+ 							case 's': path.smoothCurveBy(pos.x, pos.y, q1.x, q1.y).end(); i += 2; break;
  							// quadratic bezier
- 							case 'Q': path.quadTo(pos.x, pos.y, q1.x, q1.y).end(); break;
- 							case 'q': path.quadBy(pos.x, pos.y, q1.x, q1.y).end(); break;
+ 							case 'Q': path.quadTo(pos.x, pos.y, q1.x, q1.y).end(); i += 2; break;
+ 							case 'q': path.quadBy(pos.x, pos.y, q1.x, q1.y).end(); i += 2; break;
  							case 'T': path.smoothQuadTo(pos.x, pos.y).end(); break;
  							case 't': path.smoothQuadBy(pos.x, pos.y).end(); break;
  							// elliptical arc
