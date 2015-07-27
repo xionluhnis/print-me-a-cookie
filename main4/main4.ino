@@ -12,10 +12,12 @@
 #define DELAY_INTER 100
 #define DELAY_AFTER 100
 #define TENTH_MILLISECOND 1L
-#define HALF_MILLISECOND  5L
-#define MILLISECOND       10L
+#define HALF_MILLISECOND  (5L * TENTH_MILLISECOND)
+#define MILLISECOND       (2L * HALF_MILLISECOND)
 #define HALF_SECOND       (500L * MILLISECOND)
 #define SECOND            (1000L * MILLISECOND)
+
+#define DEFAULT_SPEED     5L
 
 // steppers
 Stepper stpE0(2, 3, 4, 5, 6, 7);
@@ -142,7 +144,7 @@ void readCommands(Stream& input){
           unsigned long steps = command.readULong();
           unsigned long count = command.readULong();
           if(steps == 0){
-            steps = HALF_MILLISECOND;
+            steps = DEFAULT_SPEED;
           }
           stp->stepBy(moves, steps, count);
         }
@@ -152,6 +154,18 @@ void readCommands(Stream& input){
       case 'r':
       case 'R': {
         resetAll();
+      } break;
+
+      // --- disable switch on steppers
+      case 'd':
+      case 'D': {
+        for(int i = 0; i < NUM_STEPPERS; ++i){
+          if(!steppers[i]->isRunning() && steppers[i]->isEnabled()){
+            steppers[i]->disable();
+            Serial.print("Disabling pin ");
+            Serial.println(i, DEC);
+          }
+        }
       } break;
 
       // --- microstepping mode
@@ -196,7 +210,7 @@ void readCommands(Stream& input){
                       ix = command.readULong(),
                       iy = command.readULong(),
                       iz = command.readULong();
-        if(sx == 0L) sx = HALF_MILLISECOND;
+        if(sx == 0L) sx = DEFAULT_SPEED;
         if(sy == 0L) sy = sx;
         if(sz == 0L) sz = sx;
         if(dx) stpX.stepBy(dx, sx, ix);
@@ -221,7 +235,7 @@ void readCommands(Stream& input){
         }
         unsigned long speed = command.readULong(),
                       init  = command.readULong();
-        if(speed == 0L) speed = HALF_MILLISECOND;
+        if(speed == 0L) speed = DEFAULT_SPEED;
         if(delta) stp->stepBy(delta, speed, init);
       } break;
 
@@ -322,7 +336,7 @@ void loop() {
   // 2 = process scheduled events
   if(error == ERR_NONE){
     // a) disable motors that won't do anything at this step
-    for(int i = 0; i < NUM_STEPPERS && false; ++i){
+    for(int i = 0; i < NUM_STEPPERS; ++i){
       if(!steppers[i]->isRunning() && steppers[i]->isEnabled()){
         steppers[i]->disable();
         Serial.print("Disabling pin ");

@@ -33,13 +33,13 @@ public:
     moves = 0;
     steps = 1;
     count = 0;
-    digitalWrite(en, LOW);  // unlock
+    enable();
     digitalWrite(stp, LOW);
     digitalWrite(dir, LOW);
     digitalWrite(ms1, HIGH);
     digitalWrite(ms2, HIGH);
     digitalWrite(ms3, HIGH);
-    digitalWrite(en, HIGH); // lock
+    disable();
     callback = NULL;
   }
 

@@ -21,6 +21,7 @@ Each stepper motor can be stepped using its corresponding pin command such as
 x 1000 10 # steps in x for 1000 steps every 10 time steps
 y 1000 10 # steps in y for 1000 steps every 10 time steps
 z -1000 1 # steps in z for 1000 reversed steps every time step
+```
 
 ## Path program
 
