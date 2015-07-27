@@ -322,7 +322,7 @@ void loop() {
   // 2 = process scheduled events
   if(error == ERR_NONE){
     // a) disable motors that won't do anything at this step
-    for(int i = 0; i < NUM_STEPPERS; ++i){
+    for(int i = 0; i < NUM_STEPPERS && false; ++i){
       if(!steppers[i]->isRunning() && steppers[i]->isEnabled()){
         steppers[i]->disable();
         Serial.print("Disabling pin ");
