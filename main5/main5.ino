@@ -60,7 +60,7 @@ void setup() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->setup();
   }
-  Serial.begin(9600); //Open Serial connection for debugging
+  Serial.begin(250000); //Open Serial connection for debugging
 
   // sd card setup
   sdcard::begin();
@@ -148,8 +148,8 @@ void readCommands(Stream& input){
 			} break;
 
 			// --- disable switch on steppers
-			case 'd':
-			case 'D': {
+      case 'X':
+			case 'x': {
 			  for(int i = 0; i < NUM_STEPPERS; ++i){
 			    if(!steppers[i]->isRunning() && steppers[i]->isEnabled()){
 			      steppers[i]->disable();
@@ -158,6 +158,43 @@ void readCommands(Stream& input){
 			    }
 			  }
 			} break;
+
+      // --- debug pin
+      case 'D':
+      case 'd': {
+        char c = command.readFullChar();
+        switch(c){
+          // - stepper settings
+          case 'X':
+          case 'x':
+          case 'Y':
+          case 'y':
+          case 'Z':
+          case 'z':
+          case 'E':
+          case 'e': {
+            Stepper *stp = selectStepper(c);
+            if(!stp) return;
+            stp->debug();
+          } break;
+
+          case 'M':
+          case 'm':
+            locXY.debug();
+            break;
+
+          case 'H':
+          case 'h':
+            locZ.debug();
+            break;
+
+          default:
+            Serial.print("Cannot debug '");
+            Serial.print(c);
+            Serial.println("'");
+            break;
+        }
+      } break;
 
 			// --- microstepping pin mode
 			case 'U':
@@ -216,6 +253,8 @@ void readCommands(Stream& input){
 			case 'E':
 			case 'e': {
 			  long freq = -command.readLong();
+        Serial.print("e ");
+        Serial.println(freq, DEC);
 			  stpE0.moveToFreq(freq);
 			} break;
 
@@ -333,7 +372,7 @@ void readCommands(Stream& input){
 			  break;
 		}
 	}
- Serial.println("Read command.");
+ // Serial.println("Read command.");
 }
 Stepper *selectStepper(char c){
   Stepper *stp = NULL;
@@ -393,6 +432,8 @@ void loop() {
     }
     idleCallback = NULL;
   }
+
+  
 
   // 3 = read user input
   if(idle()){

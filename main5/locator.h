@@ -126,7 +126,8 @@ public:
 					}
 				}
 			}
-			
+
+      /*
 			// increasing the period globally
 			if(f_trg.x != 0L && f_trg.y != 0L){
 				vec2 f_new = f_trg * 2L;
@@ -139,6 +140,7 @@ public:
 					opt = true;
 				}
 			}
+     */
 		}
 		// done, we update the parameters of both stepper motors
 		for(int i = 0; i < 2; ++i){
@@ -237,6 +239,16 @@ protected:
 				return stpY;
 		}
 	}
+
+public:
+  void debug() {
+    Serial.println("debug(m):");
+    Serial.print("f_best "); Serial.println(f_best, DEC);
+    Serial.print("df_max "); Serial.println(df_max, DEC);
+    Serial.print("epsSq  "); Serial.println(epsilonSq, DEC);
+    Serial.print("lastTg "); Serial.print(lastTarget.x, DEC); Serial.print(", "); Serial.println(lastTarget.y, DEC);
+    Serial.print("currTg "); Serial.print(currTarget.x, DEC); Serial.print(", "); Serial.println(currTarget.y, DEC);
+  }
 
 private:
 	Stepper *stpX, *stpY;
