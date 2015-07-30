@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Arduino.h"
+#include "utils.h"
 #include "error.h"
 
 bool isBreak(char c){

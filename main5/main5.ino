@@ -1,13 +1,12 @@
 
+#include <SPI.h>
+#include <SD.h>
+#include "sdcard.h"
 #include "error.h"
 #include "parser.h"
 #include "stepper.h"
 #include "locator.h"
 #include "elevator.h"
-#include "sdcard.h"
-
-#include <SPI.h>
-#include <SD.h>
 
 // delays in milliseconds
 #define delayFunc delayMicroseconds
@@ -208,8 +207,8 @@ void readCommands(Stream& input){
 			// --- elevateby dz
 			case 'Z':
 			case 'z': {
-				dz = command.readLong();
-				if(type == 'z') dz += stpZ.target(); // relative to absolute
+				long z = command.readLong();
+				if(type == 'z') z += locZ.target(); // relative to absolute
 				locZ.setTarget(z);
 			} return; // release input reading
 			
@@ -217,7 +216,7 @@ void readCommands(Stream& input){
 			case 'E':
 			case 'e': {
 			  long freq = -command.readLong();
-			  stpE0.moveFreqTo(freq);
+			  stpE0.moveToFreq(freq);
 			} break;
 
 			// --- set pin code value
@@ -239,7 +238,7 @@ void readCommands(Stream& input){
 						char c1 = command.readFullChar();
 						char c2 = command.readChar();
 						if(c1 == 'd' && c2 == 'f'){
-							stp->setMaxDeltaFreq(command.readULong());
+							stp->setDeltaFreq(command.readULong());
 						} else if(c1 == 'f' && c2 == 's'){
 							stp->setSafeFreq(command.readULong());
 						} else {

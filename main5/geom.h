@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Arduino.h"
+#include "utils.h"
+
 /**
  * Rounding type
  */
@@ -8,20 +11,20 @@ enum Rounding {
 	DOWN 	= 1,
 	UP 		= 2,
 	ROUND = 3
-}
+};
 
 /**
  * 2D Vector
  */
-template <typename S = long>
+template <typename S>
 struct vec2_ {
 	typedef vec2_<S> vec;
 	
 	S x, y;
-	vec2(S a, S b) : x(a), y(b) {}
-	explicit vec2(S a = 0L) : x(a), y(a) {}
+	vec2_(S a, S b) : x(a), y(b) {}
+	explicit vec2_(S a = 0L) : x(a), y(a) {}
 	template <typename S2>
-	vec2(const vec2_<S2> &o) : x(o.x), y(o.y) {}
+	vec2_(const vec2_<S2> &o) : x(o.x), y(o.y) {}
 	
 	S &operator[](int i){
 		switch(i){
@@ -30,26 +33,42 @@ struct vec2_ {
 			default:
 				error = ERR_INVALID_ACCESSOR;
 				return y;
+		}
 	}
+  S operator[](int i) const {
+    switch(i){
+      case 0: return x;
+      case 1: return y;
+      default:
+        error = ERR_INVALID_ACCESSOR;
+        return y;
+    }
+  }
 	
-	bool operator==(const vec &v){
+	bool operator==(const vec &v) const {
 		return v.x == x && v.y == y;
 	}
-	bool operator!=(const vec &v){
+	bool operator!=(const vec &v) const {
 		return v.x != x || v.y != y;
 	}
-	vec operator+(const vec &v){
+	vec operator+(const vec &v) const {
 		return vec(x + v.x, y + v.y);
 	}
-	vec operator-(const vec &v){
+  vec &operator+=(const vec &v) {
+    x += v.x;
+    y += v.y;
+    return *this;
+  }
+	vec operator-(const vec &v) const {
 		return vec(x - v.x, y - v.y);
 	}
-	vec operator-(){
+	vec operator-() const {
 		return vec(-x, -y);
 	}
-	vec operator*(S f){
+	vec operator*(S f) const {
 		return vec(x * f, y * f);
 	}
+ /*
 	vec divideBy(S f, Rounding r = CAST){
 		switch(r){
 			case CAST:  return vec(x / f, y / f);
@@ -61,23 +80,24 @@ struct vec2_ {
 				return vec();
 		}
 	}
-	vec abs(){
+ */
+	vec abs() const {
 		return vec(std::abs(x), std::abs(y));
 	}
-	S dot(const vec &v){
+	S dot(const vec &v) const {
 		return x * v.x + y * v.y;
 	}
-	S sqLength(){
+	S sqLength() const {
 		return dot(*this);
 	}
-	S sqDistTo(const vec &v){
+	S sqDistTo(const vec &v) const {
 		return (v - *this).sqLength();
 	}
-	S max(){
+	S max() const {
 		return std::max(x, y);
 	}
-	S min() {
-		return std::min(x, y));
+	S min() const {
+		return std::min(x, y);
 	}
 	static vec max(const vec &v1, const vec &v2){
 		return vec(std::max(v1.x, v2.x), std::max(v1.y, v2.y));

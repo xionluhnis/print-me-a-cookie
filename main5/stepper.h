@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Arduino.h"
-#include <cmath>
+#include "utils.h"
 
 long sign(long l){
 	return l < 0 ? -1 : 1;
@@ -24,13 +24,11 @@ public:
   // convert microstep mode into number of base steps
   static long stepsForMode(byte msMode){
   	switch(msMode){
-  		case MS_FULL:
   		case MS_1_1 : return 16L;
   		case MS_1_2 : return 8L;
   		case MS_1_4 : return 4L;
   		case MS_1_8 : return 2L;
-  		case MS_1_16:
-  		case MS_SLOW: return 1L;
+  		case MS_1_16: return 1L;
   		default:
   			error = ERR_INVALID_MS_MODE;
   			return 0L;
@@ -91,7 +89,7 @@ public:
   			// did we change direction?
   			if(f_cur * stepDir < 0L){
   				stepDir = sign(f_cur);
-  				digitalWrite(stepDir > 0L ? LOW : HIGH);
+  				digitalWrite(dir, stepDir > 0L ? LOW : HIGH);
   			}
   		}
   		++count;
@@ -188,7 +186,7 @@ public:
   
   // --- checks ----------------------------------------------------------------
   bool isRunning() const {
-    return f_t != IDLE_FREQ && f_c == IDLE_FREQ;
+    return f_trg != IDLE_FREQ && f_cur == IDLE_FREQ;
   }
   bool isEnabled() const {
     return enabled;

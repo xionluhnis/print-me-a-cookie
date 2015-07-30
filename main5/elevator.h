@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Arduino.h"
+#include "utils.h"
 #include "stepper.h"
 
 class Elevator {
@@ -8,7 +9,7 @@ public:
 
 	typedef void (*Callback)(int state);
 
-	Elevator(Stepper *z) : stpZ(z) {
+	explicit Elevator(Stepper *z) : stpZ(z) {
 		reset();
 	}
 	

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Arduino.h"
+#include "utils.h"
 #include "stepper.h"
 #include "geom.h"
 
@@ -52,7 +53,7 @@ public:
 			}
 			if(lastID == targetID){
 				// shift targets since we have no new target
-				prevTarget = currTarget; // => hasTarget() == false
+			  lastTarget = currTarget; // => hasTarget() == false
 			}
 		}
 		
@@ -82,7 +83,7 @@ public:
 		return std::max(t1, t2) - std::min(t1, t2); // won't underflow
 	}
 	
-	void adjustToFreq(const vec2 &f_trg){
+	void adjustToFreq(vec2 f_trg){
 		unsigned long df[2] = { df_max, df_max };
 		unsigned long t[2] = { stpX->timeToFreq(f_trg[0], df[0]), stpY->timeToFreq(f_trg[1], df[1]) };
 		unsigned long dt = deltaTime(t[0], t[1]);
@@ -113,7 +114,7 @@ public:
 			for(int i = 0; i < 2; ++i){
 				if(df[i] > 1){
 					t[i] = stepper(i)->timeToFreq(f_trg[i], df[i] - 1);
-					unsigned long dt2 = deltaTime(tt[0], tt[1]);
+					unsigned long dt2 = deltaTime(t[0], t[1]);
 					if(dt2 < dt){
 						df[i] -= 1; // decrement since it gets better
 						dt = dt2;
@@ -175,7 +176,7 @@ public:
 		f_best = 5L;
 		df_max = 24L;
 		epsilonSq = 400L;
-		lastTarget = currTarget = nextTarget = currentValue();
+		lastTarget = currTarget = value();
 		callback = NULL;
 		state = 0;
 	}
@@ -203,7 +204,7 @@ public:
 		return currTarget - lastTarget;
 	}
 	vec2 realDelta() const {
-		return currTarget - currentValue();
+		return currTarget - value();
 	}
 	
 	// --- checks ----------------------------------------------------------------
@@ -211,7 +212,7 @@ public:
 		return lastTarget != currTarget;
 	}
 	bool isEnding() const {
-		return nextTarget != currTarget;
+		return ending;
 	}
 	bool hasReachedTarget() const {
 		vec2 r = realDelta(), d = currDelta();
@@ -230,6 +231,7 @@ protected:
 			default:
 				error = ERR_INVALID_ACCESSOR;
 				return stpY;
+		}
 	}
 
 private:
