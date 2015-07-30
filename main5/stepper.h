@@ -38,8 +38,8 @@ public:
   // exceptional idle frequency case
   static const long IDLE_FREQ = 0L;
 
-  Stepper(int s, int d, int m1, int m2, int m3, int e)
-    : stp(s), dir(d), ms1(m1), ms2(m2), ms3(m3), en(e) {
+  Stepper(int s, int d, int m1, int m2, int m3, int e, char id = '?')
+    : stp(s), dir(d), ms1(m1), ms2(m2), ms3(m3), en(e), ident(id) {
       enabled = false;
       // freq data
       count = 0L;
@@ -73,7 +73,11 @@ public:
   }
 
   void exec() {
+    if(isFrozen()){
+      triggerUpdate();
+    }
   	if(isTriggering()){
+      enable();
   		digitalWrite(stp, HIGH);
   		// update position
   		steps += stepDir * stepDelta;
@@ -84,15 +88,11 @@ public:
   	if(isRunning()){
   		if(isTriggering()){
   			digitalWrite(stp, LOW);
-  			count = 0L; // reset
-  			f_cur = updateFreq(f_cur, f_trg);
-  			// did we change direction?
-  			if(f_cur * stepDir < 0L){
-  				stepDir = sign(f_cur);
-  				digitalWrite(dir, stepDir > 0L ? LOW : HIGH);
-  			}
+  			triggerUpdate();
   		}
   		++count;
+      Serial.print("running for count=");
+      Serial.println(count, DEC);
   	}
   }
   
@@ -186,7 +186,18 @@ public:
   
   // --- checks ----------------------------------------------------------------
   bool isRunning() const {
-    return f_trg != IDLE_FREQ && f_cur == IDLE_FREQ;
+    bool b = f_trg != IDLE_FREQ || f_cur != IDLE_FREQ;
+    if(b){
+      Serial.print("isRunning(");
+      Serial.print(ident);
+      Serial.print("): f_trg=");
+      Serial.print(f_trg, DEC);
+      Serial.print(", f_cur=");
+      Serial.print(f_cur, DEC);
+      Serial.print(", idle=");
+      Serial.println(IDLE_FREQ, DEC);
+    }
+    return b;
   }
   bool isEnabled() const {
     return enabled;
@@ -202,12 +213,42 @@ public:
   }
 
 protected:
+
+  void triggerUpdate() {
+    count = 0L; // reset
+    f_cur = updateFreq(f_cur, f_trg);
+    // did we change direction?
+    if(f_cur * stepDir < 0L){
+      stepDir = sign(f_cur);
+      digitalWrite(dir, stepDir > 0L ? LOW : HIGH);
+    }
+  }
   
   bool isTriggering() const {
+    Serial.print("isTriggering(");
+    Serial.print(ident);
+    Serial.print("): f_cur=");
+    Serial.print(f_cur, DEC);
+    Serial.print(", count=");
+    Serial.print(count, DEC);
+    Serial.print(", abs(f_cur)=");
+    Serial.println(std::abs(f_cur));
   	return f_cur && count >= std::abs(f_cur);
+  }
+
+  bool isFrozen() const {
+    return !f_cur && f_trg;
   }
   
   long updateFreq(long f_c, long f_t, long df) const{
+    if(ident == 'e'){
+      Serial.print("updateFreq: f_c=");
+      Serial.print(f_c, DEC);
+      Serial.print(", f_t=");
+      Serial.print(f_t, DEC);
+      Serial.print(", df=");
+      Serial.println(df);
+    }
   	// update frequency only if needed
 		if(f_c == f_t)
 			return f_t;
@@ -215,6 +256,11 @@ protected:
 		// safety targets
 		bool safe_cur = isSafeFreq(f_c);
 		bool safe_trg = isSafeFreq(f_t);
+
+    if(ident == 'e'){
+      Serial.print("safe_cur="); Serial.println(safe_cur, DEC);
+      Serial.print("safe_trg="); Serial.println(safe_trg, DEC);
+    }
 		
 		// are both safe frequencies?
 		if(safe_cur && safe_trg){
@@ -241,6 +287,10 @@ protected:
 		{
 			f_c += sign(f_c) * df;
 		}
+
+    if(ident == 'e'){
+      Serial.print("f_c <- "); Serial.println(f_c, DEC);
+    }
 		return f_c;
   }
   
@@ -251,6 +301,9 @@ protected:
 private:
   // pins
   int stp, dir, ms1, ms2, ms3, en;
+
+  // ident
+  char ident;
 
   // movement information
   unsigned long count;

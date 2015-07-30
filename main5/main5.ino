@@ -21,10 +21,10 @@
 #define DEFAULT_SPEED     5L
 
 // steppers
-Stepper stpE0(2, 3, 4, 5, 6, 7);
-Stepper stpY(8, 9, 10, 11, 12, 13);
-Stepper stpZ(22, 23, 24, 25, 26, 27);
-Stepper stpX(28, 29, 30, 31, 32, 33);
+Stepper stpE0(2, 3, 4, 5, 6, 7, 'e');
+Stepper stpY(8, 9, 10, 11, 12, 13, 'y');
+Stepper stpZ(22, 23, 24, 25, 26, 27, 'z');
+Stepper stpX(28, 29, 30, 31, 32, 33, 'x');
 
 #define NUM_STEPPERS 4
 Stepper *steppers[NUM_STEPPERS];
@@ -333,6 +333,7 @@ void readCommands(Stream& input){
 			  break;
 		}
 	}
+ Serial.println("Read command.");
 }
 Stepper *selectStepper(char c){
   Stepper *stp = NULL;

@@ -32,13 +32,16 @@ public:
 	
 	void update(){
 		// - should we be idle?
-		if(!hasTarget() && isMoving()){
-			for(int i = 0; i < 2; ++i){
-				Stepper *stp = stepper(i);
-				if(stp->targetFreq() != Stepper::IDLE_FREQ)
-					stp->moveToFreq(Stepper::IDLE_FREQ);
-			}
-			return;
+		if(!hasTarget()){
+      // just go idle if not already
+		  if(isMoving()){
+  			for(int i = 0; i < 2; ++i){
+  				Stepper *stp = stepper(i);
+  				if(stp->targetFreq() != Stepper::IDLE_FREQ)
+  					stp->moveToFreq(Stepper::IDLE_FREQ);
+  			}
+  		}
+      return;
 		}
 		
 		// target reach state
@@ -177,6 +180,7 @@ public:
 		df_max = 24L;
 		epsilonSq = 400L;
 		lastTarget = currTarget = value();
+    ending = true;
 		callback = NULL;
 		state = 0;
 	}
