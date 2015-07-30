@@ -115,230 +115,225 @@ void resetAll(){
 
 ///// Process commands /////////////////////////////////////////
 void readCommands(Stream& input){
-  LineParser line(input);
-  vec2 delta;
-  long dz = 0L;
-  while(line.available() && error <= ERR_NONE){
-    // create a command parser (subline)
-    LineParser command = line.subline();
-    
-    // command type depends on first character
-    char type = command.readChar();
-    Serial.print("Command ");
-    Serial.print(type);
-    Serial.print(" (");
-    Serial.print(input.available(), DEC);
-    Serial.println(")");
-    switch(type){
+	while(input.available() && error <= ERR_NONE){
+		// full line parser
+		LineParser line(input);
+		// create a command parser (subline)
+		LineParser command = line.subline();
+	
+		// command type depends on first character
+		char type = command.readChar();
+		Serial.print("[");
+		Serial.print(type);
+		Serial.print("] size=");
+		Serial.println(input.available(), DEC);
+		switch(type){
 
-      // --- line comment
-      case '#': {
-        Serial.print("#");
-        line.skip(true); // we skip the full line
-        Serial.println("");
-      } break;
+			// --- line comment
+			case '#': {
+			  Serial.print("#");
+			  line.skip(true); // we skip the full line
+			  Serial.println("");
+			} break;
 
-      // --- new line
-      case '\n':
-      case '\r':
-        Serial.println("Newline");
-        return;
-      
-      // --- reset all processes (needed in case of error)
-      case 'r':
-      case 'R': {
-        resetAll();
-      } break;
+			// --- new line
+			case '\n':
+			case '\r':
+			  Serial.println("Newline");
+			  return;
+			
+			// --- reset all processes (needed in case of error)
+			case 'r':
+			case 'R': {
+			  resetAll();
+			} break;
 
-      // --- disable switch on steppers
-      case 'd':
-      case 'D': {
-        for(int i = 0; i < NUM_STEPPERS; ++i){
-          if(!steppers[i]->isRunning() && steppers[i]->isEnabled()){
-            steppers[i]->disable();
-            Serial.print("Disabling pin ");
-            Serial.println(i, DEC);
-          }
-        }
-      } break;
+			// --- disable switch on steppers
+			case 'd':
+			case 'D': {
+			  for(int i = 0; i < NUM_STEPPERS; ++i){
+			    if(!steppers[i]->isRunning() && steppers[i]->isEnabled()){
+			      steppers[i]->disable();
+			      Serial.print("Disabling pin ");
+			      Serial.println(i, DEC);
+			    }
+			  }
+			} break;
 
-      // --- microstepping pin mode
-      case 'U':
-      case 'u': {
-        if(command.available()){
-          Stepper *stp = selectStepper(command.readFullChar());
-          if(!stp) return;
-          // choosing the mode
-          int mode = Stepper::MS_1_16;
-          switch(command.readInt()){
-            case 0:
-            case 16:
-              mode = Stepper::MS_1_16;
-              break;
-            case 8: mode = Stepper::MS_1_8; break;
-            case 4: mode = Stepper::MS_1_4; break;
-            case 2: mode = Stepper::MS_1_2; break;
-            case 1: mode = Stepper::MS_1_1; break;
-            default:
-              error = ERR_INVALID_MS_MODE;
-              return;
-          }
-          if(stp)
-            stp->microstep(mode);
-        }
-      } break;
+			// --- microstepping pin mode
+			case 'U':
+			case 'u': {
+			  if(command.available()){
+			    Stepper *stp = selectStepper(command.readFullChar());
+			    if(!stp) return;
+			    // choosing the mode
+			    int mode = Stepper::MS_1_16;
+			    switch(command.readInt()){
+			      case 0:
+			      case 16:
+			        mode = Stepper::MS_1_16;
+			        break;
+			      case 8: mode = Stepper::MS_1_8; break;
+			      case 4: mode = Stepper::MS_1_4; break;
+			      case 2: mode = Stepper::MS_1_2; break;
+			      case 1: mode = Stepper::MS_1_1; break;
+			      default:
+			        error = ERR_INVALID_MS_MODE;
+			        return;
+			    }
+			    if(stp)
+			      stp->microstep(mode);
+			  }
+			} break;
 
-      // --- moveto x y
-      // --- moveby dx dy
-      case 'M':
-      case 'm': {
-        vec2 p(
-        	command.readLong(),
-        	command.readLong()
-        );
-        if(type == 'M'){
-        	p -= locXY.currentTarget();
-        }
-        delta = p;
-      } break;
+			// --- moveto x y
+			// --- moveby dx dy
+			// --- transitto x y
+			// --- transitby dx dy
+			case 'M':
+			case 'm':
+			case 'T':
+			case 't': {
+			  vec2 p(
+			  	command.readLong(),
+			  	command.readLong()
+			  );
+			  if(type == 'm' || type == 't'){
+			  	p += locXY.target(); // relative to absolute
+			  }
+			  locXY.setTarget(p, type == 'M' || type == 'm');
+			} return; // release input reading
 
 			// --- elevateto z
 			// --- elevateby dz
-      case 'Z':
-      case 'z': {
-      	dz = command.readLong();
-      	if(type == 'Z') dz -= stpZ.value();
-      } break;
-      
-      // --- extrude period
-      case 'E':
-      case 'e': {
-        long freq = -command.readLong();
-        stpE0.moveFreqTo(freq);
-      } break;
+			case 'Z':
+			case 'z': {
+				dz = command.readLong();
+				if(type == 'z') dz += stpZ.target(); // relative to absolute
+				locZ.setTarget(z);
+			} return; // release input reading
+			
+			// --- extrude period
+			case 'E':
+			case 'e': {
+			  long freq = -command.readLong();
+			  stpE0.moveFreqTo(freq);
+			} break;
 
-      // --- set pin code value
-      case 'S':
-      case 's': {
-      	char c = command.readFullChar();
-      	switch(c){
-      		// - stepper settings
-      		case 'X':
-      		case 'x':
-      		case 'Y':
-      		case 'y':
-      		case 'Z':
-      		case 'z':
-      		case 'E':
-      		case 'e': {
-      			Stepper *stp = selectStepper(c);
-      			if(!stp) return;
-      			char c1 = command.readFullChar();
-      			char c2 = command.readChar();
-      			if(c1 == 'd' && c2 == 'f'){
-      				stp->setMaxDeltaFreq(command.readULong());
-      			} else if(c1 == 'f' && c2 == 's'){
-      				stp->setSafeFreq(command.readULong());
-      			} else {
-      				error = ERR_INVALID_SETTINGS;
-      				return;
-      			}
-      		} break;
-      		
-      		// - xy location settings
-      		case 'M':
-      		case 'm': {
-      			char c1 = command.readFullChar();
-      			char c2 = command.readChar();
-      			if(c1 == 'd' && c2 == 'f'){
-      				locXY.setMaxDeltaFreq(command.readULong());
-      			} else if(c1 == 'f' && c2 == 'b'){
-      				locXY.setBestFreq(command.readULong());
-      			} else {
-      				char c3 = command.readChar();
-      				if(c1 == 'e' && c2 == 'p' && c3 == 's'){
-      					locXY.setPrecision(command.readULong());
-      				} else{
-		    				error = ERR_INVALID_SETTINGS;
-		    				return;
-      				}
-      			}
-      		} break;
-      		
-      		// - z location settings
-      		case 'H':
-      		case 'h': {
-      			char c1 = command.readFullChar();
-      			char c2 = command.readChar();
-      			if(c1 == 'd' && c2 == 'f'){
-      				locZ.setMaxDeltaFreq(command.readULong());
-      			} else if(c1 == 'f' && c2 == 'b'){
-      				locZ.setBestFreq(command.readULong());
-      			} else {
-      				error = ERR_INVALID_SETTINGS;
-      				return;
-      			}
-      		} break;
-      		
-      		default:
-      			error = ERR_INVALID_SETTINGS;
-      			return;
-      	}
-      } break;
+			// --- set pin code value
+			case 'S':
+			case 's': {
+				char c = command.readFullChar();
+				switch(c){
+					// - stepper settings
+					case 'X':
+					case 'x':
+					case 'Y':
+					case 'y':
+					case 'Z':
+					case 'z':
+					case 'E':
+					case 'e': {
+						Stepper *stp = selectStepper(c);
+						if(!stp) return;
+						char c1 = command.readFullChar();
+						char c2 = command.readChar();
+						if(c1 == 'd' && c2 == 'f'){
+							stp->setMaxDeltaFreq(command.readULong());
+						} else if(c1 == 'f' && c2 == 's'){
+							stp->setSafeFreq(command.readULong());
+						} else {
+							error = ERR_INVALID_SETTINGS;
+							return;
+						}
+					} break;
+					
+					// - xy location settings
+					case 'M':
+					case 'm': {
+						char c1 = command.readFullChar();
+						char c2 = command.readChar();
+						if(c1 == 'd' && c2 == 'f'){
+							locXY.setMaxDeltaFreq(command.readULong());
+						} else if(c1 == 'f' && c2 == 'b'){
+							locXY.setBestFreq(command.readULong());
+						} else {
+							char c3 = command.readChar();
+							if(c1 == 'e' && c2 == 'p' && c3 == 's'){
+								locXY.setPrecision(command.readULong());
+							} else{
+								error = ERR_INVALID_SETTINGS;
+								return;
+							}
+						}
+					} break;
+					
+					// - z location settings
+					case 'H':
+					case 'h': {
+						char c1 = command.readFullChar();
+						char c2 = command.readChar();
+						if(c1 == 'd' && c2 == 'f'){
+							locZ.setMaxDeltaFreq(command.readULong());
+						} else if(c1 == 'f' && c2 == 'b'){
+							locZ.setBestFreq(command.readULong());
+						} else {
+							error = ERR_INVALID_SETTINGS;
+							return;
+						}
+					} break;
+					
+					default:
+						error = ERR_INVALID_SETTINGS;
+						return;
+				}
+			} break;
 
-      // --- wait [time]
-      case 'W':
-      case 'w': {
-        unsigned long time = command.readULong();
-        if(!time)
-          time = 50L * (type == 'W' ? 10L : 1L); // w0 = 50ms, W0 = 500ms 
-        else if(type == 'W')
-          time *= 1000L;
-        delay(time);
-      } break;
+			// --- wait [time]
+			case 'W':
+			case 'w': {
+			  unsigned long time = command.readULong();
+			  if(!time)
+			    time = 50L * (type == 'W' ? 10L : 1L); // w0 = 50ms, W0 = 500ms 
+			  else if(type == 'W')
+			    time *= 1000L;
+			  delay(time);
+			} break;
 
-      /**
-       * Successful commands
-       * 
-       * e/y1000 5 = 1000 moves at 5 steps speed with delayMicroseconds 100
-       */
+			/**
+			 * Successful commands
+			 * 
+			 * e/y1000 5 = 1000 moves at 5 steps speed with delayMicroseconds 100
+			 */
 
-      // --- list files we can open at root
-      case 'L':
-      case 'l': {
-        // list files on SD card
-        sdcard::list();
-      } break;
+			// --- list files we can open at root
+			case 'L':
+			case 'l': {
+			  // list files on SD card
+			  sdcard::list();
+			} break;
 
-      case 'o': {
-        // open and execute file
-        int fileID = command.readInt();
-        if(fileID > 0){
-          File &f = sdcard::open(fileID);
-          Serial.print("Opening ");
-          Serial.println(f.name());
-          
-          // execute content
-          processFile(f);
-          
-        } else {
-          Serial.println("File ID must be strictly positive.");
-        }
-      } break;
+			case 'o': {
+			  // open and execute file
+			  int fileID = command.readInt();
+			  if(fileID > 0){
+			    File &f = sdcard::open(fileID);
+			    Serial.print("Opening ");
+			    Serial.println(f.name());
+			    
+			    // execute content
+			    processFile(f);
+			    
+			  } else {
+			    Serial.println("File ID must be strictly positive.");
+			  }
+			} break;
 
-      default:
-        // otherwise
-        break;
-    }
-  }
-  
-  // should we set a move?
-  if(delta.x || delta.y){
-  	locXY.setTarget(delta + locXY.target());
-  }
-  if(delta.z){
-  	locZ.setTarget(dz + locZ.target());
-  }
+			default:
+			  // otherwise
+			  break;
+		}
+	}
 }
 Stepper *selectStepper(char c){
   Stepper *stp = NULL;
@@ -442,9 +437,11 @@ void processNextLine(int state = 0){
     Serial.print("EOF: ");
     Serial.println(file.name());
     file.close();
+    locXY.setCallback(NULL);
+    locZ.setCallback(NULL);
     return;
   }
-  idleCallback = processNextLine; // trigger again for next line on next idle time
+  // idleCallback = processNextLine; // trigger again for next line on next idle time
   readCommands(file);
 }
 
@@ -459,6 +456,9 @@ void processFile(File &file){
 
   // process file lines one by one
   errorCallback = processFileError;
+  locXY.setCallback(processNextLine);
+  locZ.setCallback(processNextLine);
+  // read first line
   processNextLine();
 }
 

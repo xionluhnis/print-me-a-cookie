@@ -16,7 +16,7 @@ bool isBlankSpace(char c){
 class LineParser {
 public:
 
-  LineParser(Stream &s, LineParser *p = NULL) : input(&s), last('\0'), valid(true), parent(p) {}
+  explicit LineParser(Stream &s, LineParser *p = NULL) : input(&s), last('\0'), valid(true), parent(p) {}
 
   LineParser subline() {
     return !valid ? *this : LineParser(*input, this);
@@ -157,4 +157,3 @@ private:
   bool valid;
   LineParser *parent;
 };
-

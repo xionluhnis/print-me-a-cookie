@@ -31,7 +31,7 @@ public:
 	
 	void update(){
 		// - should we be idle?
-		if(!hasCurrTarget() && !hasNextTarget() && isMoving()){
+		if(!hasTarget() && isMoving()){
 			for(int i = 0; i < 2; ++i){
 				Stepper *stp = stepper(i);
 				if(stp->targetFreq() != Stepper::IDLE_FREQ)
@@ -52,13 +52,12 @@ public:
 			}
 			if(lastID == targetID){
 				// shift targets since we have no new target
-				prevTarget = currTarget;
-				currTarget = nextTarget; // => hasNextTarget() == false
+				prevTarget = currTarget; // => hasTarget() == false
 			}
 		}
 		
 		// - should we stop at the target?
-		if(!hasNextTarget()){
+		if(isEnding()){
 			long dx = stpX->valueAtFreq(Stepper::IDLE_FREQ),
 					 dy = stpY->valueAtFreq(Stepper::IDLE_FREQ);
 			// should we start slowing down?
@@ -145,12 +144,12 @@ public:
 	}
 	
 	// --- setters ---------------------------------------------------------------
-	void setTarget(const vec2 &trg){
+	void setTarget(const vec2 &trg, bool end = true){
 		// shift targets
 		lastTarget = currTarget;
-		currTarget = nextTarget;
-		// set next target
-		nextTarget = trg;
+		currTarget = trg;
+		// ending state
+		ending = end;
 		// update target id
 		++targetID;
 	}
@@ -182,16 +181,13 @@ public:
 	}
 	
 	// --- getters ---------------------------------------------------------------
-	vec2 currentValue() const {
+	vec2 value() const {
 		return vec2(
 			stpX->value(), stpY->value() //, stpZ->value()
 		);
 	}
-	vec2 currentTarget() const {
-		return currTarget;
-	}
 	vec2 target() const {
-		return nextTarget;
+		return currTarget;
 	}
 	vec2 currentFreq() const {
 		return vec2(
@@ -209,15 +205,12 @@ public:
 	vec2 realDelta() const {
 		return currTarget - currentValue();
 	}
-	vec2 nextDelta() const {
-		return nextTarget - currTarget;
-	}
 	
 	// --- checks ----------------------------------------------------------------
-	bool hasCurrTarget() const {
+	bool hasTarget() const {
 		return lastTarget != currTarget;
 	}
-	bool hasNextTarget() const {
+	bool isEnding() const {
 		return nextTarget != currTarget;
 	}
 	bool hasReachedTarget() const {
@@ -247,7 +240,7 @@ private:
 	// xy target data
 	vec2 lastTarget;
 	vec2 currTarget;
-	vec2 nextTarget;
+	bool ending;
 	unsigned long targetID;
 	
 	// callback
