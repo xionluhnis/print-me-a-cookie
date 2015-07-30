@@ -54,9 +54,6 @@ public:
       stepMode = MS_SLOW;
       stepDelta = stepsForMode(stepMode);
       stepDir = 1L; // = LOW
-      // cb
-      callback = NULL;
-      state = 0L;
   }
   void setup() {
     pinMode(stp, OUTPUT);
@@ -70,16 +67,14 @@ public:
 
   void reset() {
     enable();
-    f_c = f_t = 0L;
-    enable();
+    f_cur = f_trg = 0L;
     digitalWrite(stp, LOW);
     digitalWrite(dir, LOW);
     microstep(MS_SLOW);
     disable();
-    callback = NULL;
   }
 
-  void exec(){
+  void exec() {
   	if(isTriggering()){
   		digitalWrite(stp, HIGH);
   		// update position
@@ -146,24 +141,23 @@ public:
   void setSafeFreq(unsigned long f0 = 100L){
   	f_safe = f0;
   }
-  void setCallback(Callback cb, int s0){
-    callback = cb;
-    state = s0;
-  }
   
   // --- getters ---------------------------------------------------------------
-  long targetFreq(){
+  long targetFreq() const {
   	return f_trg;
   }
-  long currentFreq(){
+  long currentFreq() const {
   	return f_cur;
   }
-  long value(){
+  long value() const {
   	return steps;
+  }
+  unsigned long stepSize() const {
+  	return stepDelta;
   }
   
   // --- estimators ------------------------------------------------------------
-  unsigned long timeBetweenFreq(long f_c, long f_t, long df){
+  unsigned long timeBetweenFreq(long f_c, long f_t, long df) const {
   	unsigned long t = 0L;
   	long f = f_c;
   	while(f != f_t){
@@ -172,14 +166,14 @@ public:
   	}
   	return t;
   }
-  unsigned long timeToFreq(long f_t, long df){
+  unsigned long timeToFreq(long f_t, long df) const {
   	unsigned long t = timeBetweenFreq(f_cur, f_t, df);
   	if(t)
   		return t + 1L - count; // account for current count
   	else
   		return 0L;
   }
-  long valueAtFreq(long f_t, long df){
+  long valueAtFreq(long f_t, long df) const {
   	long d = steps;
   	long f = f_cur;
   	while(f != f_trg){
@@ -188,31 +182,34 @@ public:
   	}
   	return d;
   }
+  long valueAtFreq(long f_t) const {
+  	return valueAtFreq(f_t, df);
+  }
   
   // --- checks ----------------------------------------------------------------
-  bool isRunning(){
+  bool isRunning() const {
     return f_t != IDLE_FREQ && f_c == IDLE_FREQ;
   }
-  bool isEnabled(){
+  bool isEnabled() const {
     return enabled;
   }
-  bool isSafeFreq(long f){
+  bool isSafeFreq(long f) const {
   	return f == IDLE_FREQ || std::abs(f) >= f_safe;
   }
-  bool hasSafeFreq(){
+  bool hasSafeFreq() const {
   	return isSafeFreq(f_cur);
   }
-  bool hasCorrectDirection(){
+  bool hasCorrectDirection() const {
   	return f_cur * f_trg >= 0L;
   }
 
 protected:
   
-  bool isTriggering(){
+  bool isTriggering() const {
   	return f_cur && count >= std::abs(f_cur);
   }
   
-  long updateFreq(long f_c, long f_t, long df){
+  long updateFreq(long f_c, long f_t, long df) const{
   	// update frequency only if needed
 		if(f_c == f_t)
 			return f_t;
@@ -249,7 +246,7 @@ protected:
 		return f_c;
   }
   
-  long updateFreq(long f_c, long f_t){
+  long updateFreq(long f_c, long f_t) const {
   	return updateFreq(f_c, f_t, df);
   }
 
@@ -269,10 +266,6 @@ private:
   long steps;			// reference number of steps
   long stepDelta; // step size
   long stepDir;		// step direction
-
-  // callback
-  Callback callback;
-  int state;
 
   // state
   bool enabled;

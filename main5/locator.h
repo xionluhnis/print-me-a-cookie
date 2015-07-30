@@ -2,98 +2,25 @@
 
 #include "Arduino.h"
 #include "stepper.h"
-
-struct Vec {
-	long x, y, z;
-	Vec(long a = 0L, long b = 0L, long c = 0L) : x(a), y(b), z(c) {}
-	
-	long &operator[](int i){
-		switch(i){
-			case 0:	return x;
-			case 1: return y;
-			case 2: return z;
-			default:
-				error = ERR_INVALID_ACCESSOR;
-				return z;
-	}
-	
-	Vec operator+(const Vec &v){
-		return Vec(x + v.x, y + v.y, z + v.z);
-	}
-	Vec operator-(const Vec &v){
-		return Vec(x - v.x, y - v.y, z - v.z);
-	}
-	Vec operator-(){
-		return Vec(-x, -y, -z);
-	}
-	Vec operator*(long f){
-		return Vec(x * f, y * f, z * f);
-	}
-	Vec operator/(long f){
-		return Vec(x / f, y / f, z / f);
-	}
-	Vec abs(){
-		return Vec(std::abs(x), std::abs(y), std::abs(z));
-	}
-	long dot(const Vec &v){
-		return x * v.x + y * v.y + z * v.z;
-	}
-	long sqLength(){
-		return dot(*this);
-	}
-	long max(){
-		return std::max(x, std::max(y, z));
-	}
-	long min() {
-		return std::min(x, std::min(y, z));
-	}
-};
+#include "geom.h"
 
 class Locator {
 public:
-	Locator(Stepper *x, Stepper *y, Stepper *z) : stpX(x), stpY(y), stpZ(z) {
-		f_best = 5L;
-		df_max = 24L;
+
+	typedef void (*Callback)(int state);
+
+	Locator(Stepper *x, Stepper *y) : stpX(x), stpY(y) {
+		reset();
 	}
 	
-	void moveBy(const Vec &d){
-	  // now, we assume that we start completely idle to simplify the problem
-	  Vec a = d.abs();
-	  long d_max = std::max(a.x, a.y);
-	  int k = a.x == d_max ? 0 : 1;
-	  int j = 1 - k;
-	  // compute best-case frequencies
-	  long f_trg[2];
-	  for(int i = 0; i < 2; ++i){
-	  	if(i == k){
-	  		f_trg[i] = f_best;
-	  	} else {
-	  		f_trg[i] = long(std::round(f_best * d_max / float(d[i])));
-	  	}
-	 	}
-		
-		// XXX we must account for the time it takes to reach these frequencies
-		unsigned long df[2] = { df_max, df_max };
-		unsigned long t[2] = { stpX->timeToFreq(f_trg[0], df[0]), stpY->timeToFreq(f_trg[1], df[1]) };
-		// Note: the j=1-k will have a smaller time (since the f_trg[k] > f_trg[j])
-		//    => we must slow down j
-		while(t[j] < t[k] && df[j] > 1L){
-			df[j] -= 1; // slowing down
-			t[j] = stepper(j)->timeToFreq(f_trg[j], df[j]);
-		}
-		
-		// XXX instead of finding the best sequence of parameters,
-		// 		 use gradient descent to optimize the parameters automatically while moving
-	}
-	
-	Vec bestFreq(const Vec &delta){
-		Vec absDelta = delta.abs();
-		long d_max = absDelta.max();
-		Vec f;
-		for(int i = 0; i < 3; ++i){
-			if(absDelta[i] == d_max){
+	vec2 bestFreq(const vec2 &delta){
+		vec2 abs = delta.abs();
+		long d_max = abs.max();
+		vec2 f;
+		for(int i = 0; i < 2; ++i){
+			if(abs[i] == d_max){
 				f[i] = sign(delta[i]) * f_best;
-			} else if(absDelta[i] == 0L) {
+			} else if(abs[i] == 0L) {
 				f[i] = 0L;
 			} else {
 				f[i] = (long)std::round(f_best * d_max / float(delta[i]));
@@ -102,50 +29,228 @@ public:
 		return f;
 	}
 	
-	void moveTo(const Vec &delta){
-	
+	void update(){
+		// - should we be idle?
+		if(!hasCurrTarget() && !hasNextTarget() && isMoving()){
+			for(int i = 0; i < 2; ++i){
+				Stepper *stp = stepper(i);
+				if(stp->targetFreq() != Stepper::IDLE_FREQ)
+					stp->moveToFreq(Stepper::IDLE_FREQ);
+			}
+			return;
+		}
+		
+		// target reach state
+		bool reached = hasReachedTarget();
+		
+		// - did we reach the target
+		if(reached){
+			unsigned long lastID = targetID;
+			// callback (mostly to get the new next target)
+			if(callback){
+				callback(state);
+			}
+			if(lastID == targetID){
+				// shift targets since we have no new target
+				prevTarget = currTarget;
+				currTarget = nextTarget; // => hasNextTarget() == false
+			}
+		}
+		
+		// - should we stop at the target?
+		if(!hasNextTarget()){
+			long dx = stpX->valueAtFreq(Stepper::IDLE_FREQ),
+					 dy = stpY->valueAtFreq(Stepper::IDLE_FREQ);
+			// should we start slowing down?
+			vec2 targetFreq;
+			if(vec2(dx, dy).sqDistTo(realDelta()) <= epsilonSq){
+				// it will take us enough time to stop
+				// that we should start slowing down now!
+				targetFreq = vec2(Stepper::IDLE_FREQ);
+			} else {
+				targetFreq = bestFreq(realDelta());
+			}
+			adjustToFreq(targetFreq);
+		} else
+		
+		// - we must make our line as straight as possible
+		{
+			adjustToFreq(bestFreq(realDelta()));
+		}
 	}
 	
-	Vec currentValue() {
-		return Vec(
-			stpX->value(), stpY->value(), stpZ->value()
-		);
-	}
-	Vec currentFreq() {
-		return Vec(
-			stpX->currentFreq(), stpY->currentFreq(), stpZ->currentFreq()
-		);
-	}
-	Vec targetFreq() {
-		return Vec(
-			stpX->targetFreq(), stpY->targetFreq(), stpZ->targetFreq()
-		);
+	static unsigned long deltaTime(unsigned long t1, unsigned long t2){
+		return std::max(t1, t2) - std::min(t1, t2); // won't underflow
 	}
 	
+	void adjustToFreq(const vec2 &f_trg){
+		unsigned long df[2] = { df_max, df_max };
+		unsigned long t[2] = { stpX->timeToFreq(f_trg[0], df[0]), stpY->timeToFreq(f_trg[1], df[1]) };
+		unsigned long dt = deltaTime(t[0], t[1]);
+		// optimize for df and f_trg, so that abs(t[0] - t[1]) is lowest
+		bool opt = true;
+		unsigned long it = 0;
+		while(opt && it < 1000){
+			++it;
+			opt = false; // by default, we stop optimizing if nothing changes
+			
+			// augmenting (first!)
+			for(int i = 0; i < 2; ++i){
+				if(df[i] < df_max){
+					t[i] = stepper(i)->timeToFreq(f_trg[i], df[i] + 1);
+					unsigned long dt2 = deltaTime(t[0], t[1]);
+					if(dt2 < dt){
+						df[i] += 1; // increment since it gets better
+						dt = dt2;
+						opt = true;
+						break;
+					}
+				}
+			}
+			// bias towards increase in acceleration
+			if(opt) continue;
+			
+			// reducing (if augmenting does not help)
+			for(int i = 0; i < 2; ++i){
+				if(df[i] > 1){
+					t[i] = stepper(i)->timeToFreq(f_trg[i], df[i] - 1);
+					unsigned long dt2 = deltaTime(tt[0], tt[1]);
+					if(dt2 < dt){
+						df[i] -= 1; // decrement since it gets better
+						dt = dt2;
+						opt = true;
+						break;
+					}
+				}
+			}
+			
+			// increasing the period globally
+			if(f_trg.x != 0L && f_trg.y != 0L){
+				vec2 f_new = f_trg * 2L;
+				for(int i = 0; i < 2; ++i)
+					t[i] = stepper(i)->timeToFreq(f_new[i], df[i]);
+				unsigned long dt2 = deltaTime(t[0], t[1]);
+				if(dt2 < dt){
+					f_trg = f_new;
+					dt = dt2;
+					opt = true;
+				}
+			}
+		}
+		// done, we update the parameters of both stepper motors
+		for(int i = 0; i < 2; ++i){
+			stepper(i)->setDeltaFreq(df[i]);
+			stepper(i)->moveToFreq(f_trg[i]);
+		}
+	}
+	
+	// --- setters ---------------------------------------------------------------
+	void setTarget(const vec2 &trg){
+		// shift targets
+		lastTarget = currTarget;
+		currTarget = nextTarget;
+		// set next target
+		nextTarget = trg;
+		// update target id
+		++targetID;
+	}
 	void setBestFreq(unsigned long f){
 		if(f)
 			f_best = f;
 	}
-	
 	void setMaxDeltaFreq(unsigned long df){
 		if(df)
 			df_max = df;
 	}
+	void setPrecision(unsigned long eps){
+		if(eps)
+			epsilonSq = eps * eps;
+	}
+	void setCallback(Callback cb){
+		callback = cb;
+	}
+	void setState(int s0){
+		state = s0;
+	}
+	void reset() {
+		f_best = 5L;
+		df_max = 24L;
+		epsilonSq = 400L;
+		lastTarget = currTarget = nextTarget = currentValue();
+		callback = NULL;
+		state = 0;
+	}
+	
+	// --- getters ---------------------------------------------------------------
+	vec2 currentValue() const {
+		return vec2(
+			stpX->value(), stpY->value() //, stpZ->value()
+		);
+	}
+	vec2 currentTarget() const {
+		return currTarget;
+	}
+	vec2 target() const {
+		return nextTarget;
+	}
+	vec2 currentFreq() const {
+		return vec2(
+			stpX->currentFreq(), stpY->currentFreq()
+		);
+	}
+	vec2 targetFreq() const {
+		return vec2(
+			stpX->targetFreq(), stpY->targetFreq()
+		);
+	}
+	vec2 currDelta() const {
+		return currTarget - lastTarget;
+	}
+	vec2 realDelta() const {
+		return currTarget - currentValue();
+	}
+	vec2 nextDelta() const {
+		return nextTarget - currTarget;
+	}
+	
+	// --- checks ----------------------------------------------------------------
+	bool hasCurrTarget() const {
+		return lastTarget != currTarget;
+	}
+	bool hasNextTarget() const {
+		return nextTarget != currTarget;
+	}
+	bool hasReachedTarget() const {
+		vec2 r = realDelta(), d = currDelta();
+		return r.dot(d) <= 0L
+				|| r.sqLength() <= epsilonSq;
+	}
+	bool isMoving() const {
+		return stpX->isRunning() || stpY->isRunning();
+	}
 	
 protected:
-	Stepper *stepper(int i){
+	Stepper *stepper(int i) const {
 		switch(i){
 			case 0: return stpX;
 			case 1: return stpY;
-			case 2: return stpZ;
 			default:
 				error = ERR_INVALID_ACCESSOR;
-				return stpZ;
+				return stpY;
 	}
 
 private:
-	Stepper *stpX, *stpY, *stpZ;
+	Stepper *stpX, *stpY;
 	unsigned long f_best, df_max;
+	unsigned long epsilonSq;
 	
-	Vec lastDir;
+	// xy target data
+	vec2 lastTarget;
+	vec2 currTarget;
+	vec2 nextTarget;
+	unsigned long targetID;
+	
+	// callback
+	Callback callback;
+	int state;
 };

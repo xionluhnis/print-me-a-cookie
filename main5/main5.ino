@@ -2,6 +2,8 @@
 #include "error.h"
 #include "parser.h"
 #include "stepper.h"
+#include "locator.h"
+#include "elevator.h"
 #include "sdcard.h"
 
 #include <SPI.h>
@@ -28,6 +30,10 @@ Stepper stpX(28, 29, 30, 31, 32, 33);
 #define NUM_STEPPERS 4
 Stepper *steppers[NUM_STEPPERS];
 
+// position system
+Locator locXY(&stpX, &stpY);
+Elevator locZ(&stpZ);
+
 // callback type
 typedef void (*Callback)(int state);
 
@@ -41,7 +47,7 @@ void setup();
 void loop();
 void react();
 void process();
-boolean idle();
+bool idle();
 Stepper *selectStepper(char c);
 void readCommands(Stream& input = Serial);
 void processFile(File &file);
@@ -71,6 +77,11 @@ void react() {
 
 ///// Process events ///////////////////////////////////////////
 void process() {
+	// update location
+	locXY.update();
+	locZ.update();
+	
+	// update steppers
   for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->exec();
   }
@@ -82,7 +93,7 @@ void process() {
 }
 
 ///// Check if idle ////////////////////////////////////////////
-boolean idle() {
+bool idle() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     if(steppers[i]->isRunning()) return false;
   }
@@ -93,6 +104,8 @@ boolean idle() {
 void resetAll(){
   for(int i = 0; i < NUM_STEPPERS; ++i)
     steppers[i]->reset();
+  locXY.reset();
+  locZ.reset();
   error = ERR_NONE; // clean flag
   // remove callbacks
   idleCallback = NULL;
@@ -103,13 +116,15 @@ void resetAll(){
 ///// Process commands /////////////////////////////////////////
 void readCommands(Stream& input){
   LineParser line(input);
+  vec2 delta;
+  long dz = 0L;
   while(line.available() && error <= ERR_NONE){
     // create a command parser (subline)
     LineParser command = line.subline();
     
     // command type depends on first character
     char type = command.readChar();
-    Serial.print('Command ');
+    Serial.print("Command ");
     Serial.print(type);
     Serial.print(" (");
     Serial.print(input.available(), DEC);
@@ -129,27 +144,6 @@ void readCommands(Stream& input){
         Serial.println("Newline");
         return;
       
-      // --- pX where X = pin delta speed init
-      case 'p': {
-        if(command.available()){
-          // stepper
-          char c;
-          do {
-            c = command.readChar();
-          } while(isBlankSpace(c));
-          Stepper *stp = selectStepper(c);
-          if(!stp) return;
-          // move data
-          long moves = command.readLong();
-          unsigned long steps = command.readULong();
-          unsigned long count = command.readULong();
-          if(steps == 0){
-            steps = DEFAULT_SPEED;
-          }
-          stp->stepBy(moves, steps, count);
-        }
-      } break;
-      
       // --- reset all processes (needed in case of error)
       case 'r':
       case 'R': {
@@ -168,16 +162,11 @@ void readCommands(Stream& input){
         }
       } break;
 
-      // --- microstepping mode
+      // --- microstepping pin mode
       case 'U':
       case 'u': {
         if(command.available()){
-          // choosing the stepper
-          char c;
-          do {
-            c = command.readChar();
-          } while(isBlankSpace(c));
-          Stepper *stp = selectStepper(c);
+          Stepper *stp = selectStepper(command.readFullChar());
           if(!stp) return;
           // choosing the mode
           int mode = Stepper::MS_1_16;
@@ -199,58 +188,102 @@ void readCommands(Stream& input){
         }
       } break;
 
-      // --- moveby dx dy dz sx [sy sz ix iy iz]
+      // --- moveto x y
+      // --- moveby dx dy
+      case 'M':
       case 'm': {
-        long dx = command.readLong(),
-             dy = command.readLong(),
-             dz = command.readLong();
-        unsigned long sx = command.readULong(),
-                      sy = command.readULong(),
-                      sz = command.readULong(),
-                      ix = command.readULong(),
-                      iy = command.readULong(),
-                      iz = command.readULong();
-        if(sx == 0L) sx = DEFAULT_SPEED;
-        if(sy == 0L) sy = sx;
-        if(sz == 0L) sz = sx;
-        if(dx) stpX.stepBy(dx, sx, ix);
-        if(dy) stpY.stepBy(dy, sy, iy);
-        if(dz) stpZ.stepBy(dz, sz, iz);
+        vec2 p(
+        	command.readLong(),
+        	command.readLong()
+        );
+        if(type == 'M'){
+        	p -= locXY.currentTarget();
+        }
+        delta = p;
       } break;
 
-      // --- moveby delta [speed init]
-      case 'Y':
-      case 'y':
-      case 'X':
-      case 'x':
+			// --- elevateto z
+			// --- elevateby dz
       case 'Z':
-      case 'z':
+      case 'z': {
+      	dz = command.readLong();
+      	if(type == 'Z') dz -= stpZ.value();
+      } break;
+      
+      // --- extrude period
       case 'E':
       case 'e': {
-        Stepper *stp = selectStepper(type);
-        if(!stp) return;
-        long delta = command.readLong();
-        if(type == 'e' || type == 'E'){
-          delta *= -1;
-        }
-        unsigned long speed = command.readULong(),
-                      init  = command.readULong();
-        if(speed == 0L) speed = DEFAULT_SPEED;
-        if(delta) stp->stepBy(delta, speed, init);
+        long freq = -command.readLong();
+        stpE0.moveFreqTo(freq);
       } break;
 
-      // --- speed type [profile]
+      // --- set pin code value
       case 'S':
       case 's': {
-        // choosing the stepper
-        char c;
-        do {
-          c = command.readChar();
-        } while(isBlankSpace(c));
-        Stepper *stp = selectStepper(c);
-        if(!stp) return;
-        
-        // TODO set speed profile
+      	char c = command.readFullChar();
+      	switch(c){
+      		// - stepper settings
+      		case 'X':
+      		case 'x':
+      		case 'Y':
+      		case 'y':
+      		case 'Z':
+      		case 'z':
+      		case 'E':
+      		case 'e': {
+      			Stepper *stp = selectStepper(c);
+      			if(!stp) return;
+      			char c1 = command.readFullChar();
+      			char c2 = command.readChar();
+      			if(c1 == 'd' && c2 == 'f'){
+      				stp->setMaxDeltaFreq(command.readULong());
+      			} else if(c1 == 'f' && c2 == 's'){
+      				stp->setSafeFreq(command.readULong());
+      			} else {
+      				error = ERR_INVALID_SETTINGS;
+      				return;
+      			}
+      		} break;
+      		
+      		// - xy location settings
+      		case 'M':
+      		case 'm': {
+      			char c1 = command.readFullChar();
+      			char c2 = command.readChar();
+      			if(c1 == 'd' && c2 == 'f'){
+      				locXY.setMaxDeltaFreq(command.readULong());
+      			} else if(c1 == 'f' && c2 == 'b'){
+      				locXY.setBestFreq(command.readULong());
+      			} else {
+      				char c3 = command.readChar();
+      				if(c1 == 'e' && c2 == 'p' && c3 == 's'){
+      					locXY.setPrecision(command.readULong());
+      				} else{
+		    				error = ERR_INVALID_SETTINGS;
+		    				return;
+      				}
+      			}
+      		} break;
+      		
+      		// - z location settings
+      		case 'H':
+      		case 'h': {
+      			char c1 = command.readFullChar();
+      			char c2 = command.readChar();
+      			if(c1 == 'd' && c2 == 'f'){
+      				locZ.setMaxDeltaFreq(command.readULong());
+      			} else if(c1 == 'f' && c2 == 'b'){
+      				locZ.setBestFreq(command.readULong());
+      			} else {
+      				error = ERR_INVALID_SETTINGS;
+      				return;
+      			}
+      		} break;
+      		
+      		default:
+      			error = ERR_INVALID_SETTINGS;
+      			return;
+      	}
       } break;
 
       // --- wait [time]
@@ -285,7 +318,7 @@ void readCommands(Stream& input){
           Serial.print("Opening ");
           Serial.println(f.name());
           
-          // TODO execute content
+          // execute content
           processFile(f);
           
         } else {
@@ -297,6 +330,14 @@ void readCommands(Stream& input){
         // otherwise
         break;
     }
+  }
+  
+  // should we set a move?
+  if(delta.x || delta.y){
+  	locXY.setTarget(delta + locXY.target());
+  }
+  if(delta.z){
+  	locZ.setTarget(dz + locZ.target());
   }
 }
 Stepper *selectStepper(char c){

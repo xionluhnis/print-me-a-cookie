@@ -40,6 +40,14 @@ public:
     }
     return '\0';
   }
+  
+  char readFullChar(){
+  	char c;
+  	do {
+  		c = readChar();
+  	} while(isBlankSpace(c));
+  	return c;
+  }
 
   int readInt(){
     if(!valid)

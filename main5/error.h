@@ -12,7 +12,9 @@ enum ErrorType {
   ERR_CMD_UNSUPPORTED  = 5,
   ERR_INVALID_MS_MODE  = 6,
   ERR_INVALID_STEPPER  = 7,
-  ERR_INVALID_ACCESSOR = 8
+  ERR_INVALID_ACCESSOR = 8,
+  ERR_INVALID_ROUNDING = 9,
+  ERR_INVALID_SETTINGS = 10
 };
 
 int error;
@@ -44,6 +46,12 @@ void logError() {
       break;
     case ERR_INVALID_ACCESSOR:
     	Serial.println("Accessing data out of bound!");
+    	break;
+    case ERR_INVALID_ROUNDING:
+    	Serial.println("Invalid rounding parameter!");
+    	break;
+    case ERR_INVALID_SETTINGS:
+    	Serial.println("Invalid setting command!");
     	break;
     case -1:
       return;
