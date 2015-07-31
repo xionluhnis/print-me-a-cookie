@@ -43,7 +43,7 @@ public:
       enabled = false;
       // freq data
       count = 0L;
-      f_cur = 0L;
+      f_cur = f_mem = 0L;
       f_trg = 0L;
       df = 1L;
       f_safe = 5L;
@@ -67,7 +67,7 @@ public:
     enable();
     df = 1L;
     f_safe = 5L;
-    count = f_cur = f_trg = 0L;
+    count = f_cur = f_trg = f_mem = 0L;
     digitalWrite(stp, LOW);
     digitalWrite(dir, LOW);
     microstep(MS_SLOW);
@@ -213,6 +213,14 @@ protected:
     count = 0L; // reset
     long f_tmp = f_cur;
     f_cur = updateFreq(f_cur, f_trg);
+    // prevent oscillation
+    if(f_cur != f_tmp && f_cur == f_mem){
+      // revert change
+      f_cur = f_tmp;
+    } else {
+      // remember change
+      f_mem = f_tmp;
+    }
     if(f_cur != f_tmp){
       Serial.print("freqUpdate(");
       Serial.print(ident);
@@ -310,7 +318,7 @@ private:
 
   // movement information
   unsigned long count;
-  long f_cur, f_trg;
+  long f_cur, f_trg, f_mem;
   // movement profile
   unsigned long df;  		// maximum absolute delta in frequency, only for f < f_safe
   unsigned long f_safe; // frequency above which a direct speed change is allowed

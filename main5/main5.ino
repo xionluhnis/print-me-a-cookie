@@ -230,10 +230,10 @@ void readCommands(Stream& input){
 			case 'm':
 			case 'T':
 			case 't': {
-			  vec2 p(
-			  	command.readLong(),
-			  	command.readLong()
-			  );
+        long x = command.readLong();
+        long y = command.readLong();
+			  vec2 p(x, y);
+        Serial.print(type); Serial.print(" x="); Serial.print(p.x, DEC); Serial.print(", y="); Serial.println(p.y, DEC);
 			  if(type == 'm' || type == 't'){
 			  	p += locXY.target(); // relative to absolute
 			  }
