@@ -71,7 +71,11 @@ void setup() {
 
 ///// React to external input //////////////////////////////////
 void react() {
-
+  int s = analogRead(15);
+  if(s){
+    // resetAll();
+  }
+  // Serial.print("switch: "); Serial.println(s, DEC);
 }
 
 ///// Process events ///////////////////////////////////////////
@@ -148,8 +152,7 @@ void readCommands(Stream& input){
 			} break;
 
 			// --- disable switch on steppers
-      case 'X':
-			case 'x': {
+      case '-': {
 			  for(int i = 0; i < NUM_STEPPERS; ++i){
 			    if(!steppers[i]->isRunning() && steppers[i]->isEnabled()){
 			      steppers[i]->disable();
@@ -158,6 +161,14 @@ void readCommands(Stream& input){
 			    }
 			  }
 			} break;
+
+      // --- toggle systems on/off
+      case '*': {
+        char c = command.readFullChar();
+        if(c == 'm' || c == 'M'){
+          locXY.toggle();
+        }
+      } break;
 
       // --- debug pin
       case 'D':
@@ -250,12 +261,16 @@ void readCommands(Stream& input){
 			} return; // release input reading
 			
 			// --- extrude period
+      case 'X':
+      case 'x':
+      case 'Y':
+      case 'y':
 			case 'E':
 			case 'e': {
-			  long freq = -command.readLong();
-        Serial.print("e ");
-        Serial.println(freq, DEC);
-			  stpE0.moveToFreq(freq);
+        Stepper *stp = selectStepper(type);
+			  long freq = command.readLong();
+        Serial.print(type); Serial.print(" "); Serial.println(freq, DEC);
+			  stp->moveToFreq(freq);
 			} break;
 
 			// --- set pin code value

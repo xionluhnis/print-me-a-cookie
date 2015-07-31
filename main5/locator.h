@@ -31,6 +31,9 @@ public:
 	}
 	
 	void update(){
+    // should we work or not?
+    if(!enabled) return;
+    
 		// - should we be idle?
 		if(!hasTarget()){
       // just go idle if not already
@@ -185,7 +188,11 @@ public:
     ending = true;
 		callback = NULL;
 		state = 0;
+    enabled = true;
 	}
+  void toggle(){
+    enabled = !enabled;
+  }
 	
 	// --- getters ---------------------------------------------------------------
 	vec2 value() const {
@@ -264,4 +271,7 @@ private:
 	// callback
 	Callback callback;
 	int state;
+
+  // state
+  bool enabled;
 };
