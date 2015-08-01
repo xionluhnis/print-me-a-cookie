@@ -25,7 +25,7 @@ z -1000 1 # steps in z for 1000 reversed steps every time step
 
 ## Path program
 
-See Svg2path.
+See Pathr.
 
 ## TODO
 
