@@ -68,7 +68,7 @@ function Path(welcome){
  	},
  	
 // getter command
-	currentPos: function(){
+	currentPosition: function(){
 		return this.context.transformPoint(this.relPos);
 	},
 	currentZ: function(){
