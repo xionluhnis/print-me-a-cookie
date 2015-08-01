@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>SVG to Path</title>
+    <title>SVG/GCode to Path</title>
     <meta charset="utf-8">
     <style>
     header {
@@ -12,6 +12,7 @@
       height: auto;
       background: #ddd;
       border-bottom: 2px solid #ddd;
+      z-index: 1000;
     }
     header input[type=file] {
       height: 3em;
@@ -63,17 +64,17 @@
       min-height: 400px;
       white-space: pre-line;
     }
-    #image, #svg {
+    #image, #source {
       width: 100%;
       min-height: 200px;
     }
     #image {
       background: #ffeded;
     }
-    #svg {
+    #source {
       background: #f4f4f4;
     }
-    #image, #svg, #right {
+    #image, #source, #right {
       box-sizing: padding-box;
       padding: 20px;
       color: gray;
@@ -81,12 +82,19 @@
     #image > * {
       width: 100%;
     }
+    #image canvas {
+      display: block;
+      width: 100%;
+    }
+    #image svg {
+      display: none;
+    }
     #image svg path, #image svg rect {
       stroke-dasharray: 1000 !important;
         stroke-dashoffset: 1000;
         animation: dash 5s linear alternate infinite;
     }
-    #svg {
+    #source {
       overflow: auto;
     }
     #data {
@@ -111,10 +119,11 @@
     </header>
     <div id="left">
       <div id="image">
-        <img />
+        <div id="svg"></div>
+        <div id="canvas"></div>
       </div>
-      <div id="svg">
-        <pre>No SVG code.</pre>
+      <div id="source">
+        <pre>No SVG or GCode.</pre>
       </div>
     </div>
     <div id="right">
@@ -124,6 +133,7 @@
       
     </div>
     <script type="text/javascript" src="jquery.min.js"></script>
+    <script type="text/javascript" src="dash.canvas.js"></script>
     <script type="text/javascript" src="urlexport.js"></script>
     <script type="text/javascript" src="point.js"></script>
     <script type="text/javascript" src="matrix.js"></script>
@@ -134,14 +144,121 @@
     <script type="text/javascript" src="svg2path.js"></script>
     <script type="text/javascript">
       var fileName = 'code';
-      function resetCode(){
-        console.log('reset');
-        var svg = $('#data svg');
-        var scale = parseFloat($('#scale').val());
-        if(svg.length){
-          var code = svg2path(svg, scale);
-          $('#right').text(code);
+      var timeInterval = 30;
+      function updateCanvas(){
+        var canvas = $('#canvas canvas');
+        var path = canvas.data('path');
+        var iter = canvas.data('iteration') || 0;
+        if(!canvas.length || !path)
+          return; // stop!
+
+        // compute bounds
+        var min = path.points.reduce(function(left, right){
+          return {
+            x: Math.min(left.x, right.x),
+            y: Math.min(left.y, right.y)
+          };
+        }, {x: 0, y: 0});
+        var max = path.points.reduce(function(left, right){
+          return {
+            x: Math.max(left.x, right.x),
+            y: Math.max(left.y, right.y)
+          };
+        }, {x: 0, y: 0});
+        var range = {x: max.x - min.x, y: max.y - min.y};
+
+        // scaling of coordinates
+        var margin = 20;
+        canvas[0].width = canvas.width();
+        var width = canvas.width() - 2 * margin;
+        canvas[0].height = range.y * width / range.x;
+        var height = canvas.height() - 2 * margin;
+        var scaleX = function(x){
+          var a = margin + (x - min.x) * width / range.x;
+          if(a > canvas.width() || a < 0){
+          console.log('%f -> %f\n', x, a);
+          }
+          return a;
+        };
+        var scaleY = function(y){
+          return margin + (y - min.y) * height / range.y;
+        };
+
+        var ctx = canvas[0].getContext('2d');
+        ctx.clearRect(0, 0, canvas.width(), canvas.height());
+        var lastType = null;
+        for(var i = 0; i <= iter; ++i){
+          var prev = i ? path.points[i - 1] : {x: 0, y: 0};
+          var curr = path.points[i];
+          var thisType = curr.type.toUpperCase();
+          if(lastType != thisType){
+            if(i)
+              ctx.stroke();
+            ctx.beginPath();
+            switch(thisType){
+              case 'L':
+                ctx.strokeStyle = 'blue';
+                break;
+              case 'M':
+                ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
+                break;
+              default:
+                ctx.strokeStyle = 'silver';
+                break;
+            }
+            lastType = thisType;
+          }
+          if(thisType == 'L'){
+            ctx.lineTo(scaleX(curr.x), scaleY(curr.y));
+          } else {
+            ctx.dashedLine(
+                scaleX(prev.x), scaleY(prev.y),
+                scaleX(curr.x), scaleY(curr.y));
+          }
         }
+        ctx.stroke();
+
+        // next time we do it again, at next stage
+        iter = (iter + 1) % Math.max(1, path.points.length);
+        canvas.data('iteration', iter); // updated iteration number
+        setTimeout(updateCanvas, timeInterval);
+      }
+      function resetCode(type, data){
+        console.log('reset');
+
+        // retrieve parameters
+        var params = {
+          scale: parseFloat($('#scale').val())
+        };
+
+        // svg display
+        if(type == 'svg')
+          $('#svg').show();
+        else
+          $('#svg').hide();
+
+        // act upon type
+        var path;
+        switch(type){
+          // --- svg image --------------------------------
+          case 'svg':
+            path = svg2path($(data), params);
+            $('#svg').html($('#data').html());
+            break;
+
+          // --- g code -----------------------------------
+          case 'gcode':
+            path = gcode2path(data, params);
+            break;
+
+          default:
+            console.log("Type=%s not supported!", type);
+            break;
+        }
+        $('#right').text(path.code);
+        $('#canvas').children().remove();
+        $('<canvas />').appendTo('#canvas').data('path', path);
+        setTimeout(updateCanvas, timeInterval);
       }
     
       function loadFile(event){
@@ -150,27 +267,22 @@
           return;
         }
         var f = files[0];
-        if(!f.type.match('image/svg*')){
-          return;
+        var type = null;
+        console.log('File type: ' + f.type);
+        if(f.type.match('image/svg*')){
+          type = 'svg';
+        } else if(f.type.match('text/*') || f.name.endsWith('.gcode')){
+          type = 'gcode';
         }
         fileName = f.name.replace(/\..*$/, '');
-        console.log('File type: ' + f.type);
-        
+        if(!type) return;
         // load first file
-        var reader = new FileReader();
-        reader.onload = function(ev){
-          // $('#image img').attr('src', ev.target.result).text('');
+        var source = new FileReader();
+        source.onload = function(ev){
+          $('#source pre').text(ev.target.result);
+          resetCode(type, ev.target.result);
         };
-        reader.readAsDataURL(f);
-        
-        var svg = new FileReader();
-        svg.onload = function(ev){
-          $('#image').html(ev.target.result);
-          $('#svg pre').text(ev.target.result);
-          $('#data').html(ev.target.result);
-          resetCode();
-        };
-        svg.readAsText(f);
+        source.readAsText(f);
       }
       
       function saveFile(){
