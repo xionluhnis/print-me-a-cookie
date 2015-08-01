@@ -25,6 +25,8 @@ See [GCode](http://reprap.org/wiki/G-code) wiki.
 
 ## TODO
 
+* automatically insert waiting positions when features form hard angles
+* use `T` and `t` for continuous paths (= without change in extrusion mode)
 * update svg2path.js to use the new path commands
 * implement arcTo / arcBy to be used for A/a paths and G2/G3 codes
 * add parameter panel to specify speeds, acceleration and various path parameters

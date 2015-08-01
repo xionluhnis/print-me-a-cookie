@@ -135,7 +135,7 @@ function svg2path(root, scale){
  								break;
  						}
  						if(!firstPos){
- 							firstPos = path.currentPos(); // /!\ context position, not real location
+ 							firstPos = path.currentPosition(); // /!\ context position, not real location
  						}
  						break;
  				}
