@@ -43,10 +43,10 @@ public:
       enabled = false;
       // freq data
       count = 0L;
-      f_cur = 0L;
+      f_cur = f_mem = 0L;
       f_trg = 0L;
       df = 1L;
-      f_safe = 100L;
+      f_safe = 5L;
       // positioning
       steps = 0L;
       stepMode = MS_SLOW;
@@ -65,7 +65,9 @@ public:
 
   void reset() {
     enable();
-    f_cur = f_trg = 0L;
+    df = 1L;
+    f_safe = 5L;
+    count = f_cur = f_trg = f_mem = 0L;
     digitalWrite(stp, LOW);
     digitalWrite(dir, LOW);
     microstep(MS_SLOW);
@@ -74,9 +76,12 @@ public:
 
   void exec() {
     if(isFrozen()){
+      // Serial.print("Frozen, awaken: ");
+      // Serial.println(ident);
       triggerUpdate();
     }
   	if(isTriggering()){
+      // arduino::printf("Trigger %c up\n", ident);
       enable();
   		digitalWrite(stp, HIGH);
   		// update position
@@ -87,12 +92,13 @@ public:
   void release() {
   	if(isRunning()){
   		if(isTriggering()){
+        // arduino::printf("Trigger %c down\n", ident);
   			digitalWrite(stp, LOW);
   			triggerUpdate();
   		}
   		++count;
-      Serial.print("running for count=");
-      Serial.println(count, DEC);
+      // Serial.print("running for count=");
+      // Serial.println(count, DEC);
   	}
   }
   
@@ -174,7 +180,7 @@ public:
   long valueAtFreq(long f_t, long df) const {
   	long d = steps;
   	long f = f_cur;
-  	while(f != f_trg){
+  	while(f != f_t){
   		d += sign(f) * stepDelta;
   		f = updateFreq(f, f_t, df);
   	}
@@ -186,18 +192,7 @@ public:
   
   // --- checks ----------------------------------------------------------------
   bool isRunning() const {
-    bool b = f_trg != IDLE_FREQ || f_cur != IDLE_FREQ;
-    if(b){
-      Serial.print("isRunning(");
-      Serial.print(ident);
-      Serial.print("): f_trg=");
-      Serial.print(f_trg, DEC);
-      Serial.print(", f_cur=");
-      Serial.print(f_cur, DEC);
-      Serial.print(", idle=");
-      Serial.println(IDLE_FREQ, DEC);
-    }
-    return b;
+    return f_trg != IDLE_FREQ || f_cur != IDLE_FREQ;
   }
   bool isEnabled() const {
     return enabled;
@@ -216,23 +211,31 @@ protected:
 
   void triggerUpdate() {
     count = 0L; // reset
+    long f_tmp = f_cur;
     f_cur = updateFreq(f_cur, f_trg);
+    // prevent oscillation
+    if(f_cur != f_tmp && f_cur == f_mem){
+      // revert change
+      f_cur = f_tmp;
+    } else {
+      // remember change
+      f_mem = f_tmp;
+    }
+    if(f_cur != f_tmp){
+      Serial.print("freqUpdate(");
+      Serial.print(ident);
+      Serial.print("): ");
+      Serial.println(f_cur, DEC);
+    }
     // did we change direction?
     if(f_cur * stepDir < 0L){
       stepDir = sign(f_cur);
+      // arduino::printf("Changing dir of '%c'.\n", ident);
       digitalWrite(dir, stepDir > 0L ? LOW : HIGH);
     }
   }
   
   bool isTriggering() const {
-    Serial.print("isTriggering(");
-    Serial.print(ident);
-    Serial.print("): f_cur=");
-    Serial.print(f_cur, DEC);
-    Serial.print(", count=");
-    Serial.print(count, DEC);
-    Serial.print(", abs(f_cur)=");
-    Serial.println(std::abs(f_cur));
   	return f_cur && count >= std::abs(f_cur);
   }
 
@@ -242,12 +245,7 @@ protected:
   
   long updateFreq(long f_c, long f_t, long df) const{
     if(ident == 'e'){
-      Serial.print("updateFreq: f_c=");
-      Serial.print(f_c, DEC);
-      Serial.print(", f_t=");
-      Serial.print(f_t, DEC);
-      Serial.print(", df=");
-      Serial.println(df);
+      // arduino::printf("updateFreq: f_c=%d, f_t=%d, df=%d\n", f_c, f_t, df);
     }
   	// update frequency only if needed
 		if(f_c == f_t)
@@ -258,8 +256,8 @@ protected:
 		bool safe_trg = isSafeFreq(f_t);
 
     if(ident == 'e'){
-      Serial.print("safe_cur="); Serial.println(safe_cur, DEC);
-      Serial.print("safe_trg="); Serial.println(safe_trg, DEC);
+      // Serial.print("safe_cur="); Serial.println(safe_cur, DEC);
+      // Serial.print("safe_trg="); Serial.println(safe_trg, DEC);
     }
 		
 		// are both safe frequencies?
@@ -289,13 +287,26 @@ protected:
 		}
 
     if(ident == 'e'){
-      Serial.print("f_c <- "); Serial.println(f_c, DEC);
+      // Serial.print("f_c <- "); Serial.println(f_c, DEC);
     }
 		return f_c;
   }
   
   long updateFreq(long f_c, long f_t) const {
   	return updateFreq(f_c, f_t, df);
+  }
+
+public:
+  void debug() {
+    Serial.print("debug("); Serial.print(ident); Serial.println("):");
+    Serial.print("count  "); Serial.println(count, DEC);
+    Serial.print("f_cur  "); Serial.println(f_cur, DEC);
+    Serial.print("f_trg  "); Serial.println(f_trg, DEC);
+    Serial.print("df     "); Serial.println(df, DEC);
+    Serial.print("f_safe "); Serial.println(f_safe, DEC);
+    Serial.print(ident); Serial.print(", "); Serial.print(steps, DEC); Serial.print(", "); Serial.print(stepDelta, DEC); Serial.print(", "); Serial.println(stepDir, DEC);
+    //arduino::printf("position: stepMode=%d, steps=%d, stepDelta=%d, stepDir=%d\n",
+    //                stepMode, steps, stepDelta, stepDir);
   }
 
 private:
@@ -307,7 +318,7 @@ private:
 
   // movement information
   unsigned long count;
-  long f_cur, f_trg;
+  long f_cur, f_trg, f_mem;
   // movement profile
   unsigned long df;  		// maximum absolute delta in frequency, only for f < f_safe
   unsigned long f_safe; // frequency above which a direct speed change is allowed

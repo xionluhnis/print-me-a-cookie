@@ -60,7 +60,7 @@ void setup() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->setup();
   }
-  Serial.begin(9600); //Open Serial connection for debugging
+  Serial.begin(250000); //Open Serial connection for debugging
 
   // sd card setup
   sdcard::begin();
@@ -71,7 +71,11 @@ void setup() {
 
 ///// React to external input //////////////////////////////////
 void react() {
-
+  int s = analogRead(15);
+  if(s){
+    // resetAll();
+  }
+  // Serial.print("switch: "); Serial.println(s, DEC);
 }
 
 ///// Process events ///////////////////////////////////////////
@@ -148,8 +152,7 @@ void readCommands(Stream& input){
 			} break;
 
 			// --- disable switch on steppers
-			case 'd':
-			case 'D': {
+      case '-': {
 			  for(int i = 0; i < NUM_STEPPERS; ++i){
 			    if(!steppers[i]->isRunning() && steppers[i]->isEnabled()){
 			      steppers[i]->disable();
@@ -158,6 +161,51 @@ void readCommands(Stream& input){
 			    }
 			  }
 			} break;
+
+      // --- toggle systems on/off
+      case '*': {
+        char c = command.readFullChar();
+        if(c == 'm' || c == 'M'){
+          locXY.toggle();
+        }
+      } break;
+
+      // --- debug pin
+      case 'D':
+      case 'd': {
+        char c = command.readFullChar();
+        switch(c){
+          // - stepper settings
+          case 'X':
+          case 'x':
+          case 'Y':
+          case 'y':
+          case 'Z':
+          case 'z':
+          case 'E':
+          case 'e': {
+            Stepper *stp = selectStepper(c);
+            if(!stp) return;
+            stp->debug();
+          } break;
+
+          case 'M':
+          case 'm':
+            locXY.debug();
+            break;
+
+          case 'H':
+          case 'h':
+            locZ.debug();
+            break;
+
+          default:
+            Serial.print("Cannot debug '");
+            Serial.print(c);
+            Serial.println("'");
+            break;
+        }
+      } break;
 
 			// --- microstepping pin mode
 			case 'U':
@@ -193,10 +241,10 @@ void readCommands(Stream& input){
 			case 'm':
 			case 'T':
 			case 't': {
-			  vec2 p(
-			  	command.readLong(),
-			  	command.readLong()
-			  );
+        long x = command.readLong();
+        long y = command.readLong();
+			  vec2 p(x, y);
+        Serial.print(type); Serial.print(" x="); Serial.print(p.x, DEC); Serial.print(", y="); Serial.println(p.y, DEC);
 			  if(type == 'm' || type == 't'){
 			  	p += locXY.target(); // relative to absolute
 			  }
@@ -213,10 +261,16 @@ void readCommands(Stream& input){
 			} return; // release input reading
 			
 			// --- extrude period
+      case 'X':
+      case 'x':
+      case 'Y':
+      case 'y':
 			case 'E':
 			case 'e': {
-			  long freq = -command.readLong();
-			  stpE0.moveToFreq(freq);
+        Stepper *stp = selectStepper(type);
+			  long freq = command.readLong();
+        Serial.print(type); Serial.print(" "); Serial.println(freq, DEC);
+			  stp->moveToFreq(freq);
 			} break;
 
 			// --- set pin code value
@@ -333,7 +387,7 @@ void readCommands(Stream& input){
 			  break;
 		}
 	}
- Serial.println("Read command.");
+ // Serial.println("Read command.");
 }
 Stepper *selectStepper(char c){
   Stepper *stp = NULL;
@@ -393,6 +447,8 @@ void loop() {
     }
     idleCallback = NULL;
   }
+
+  
 
   // 3 = read user input
   if(idle()){

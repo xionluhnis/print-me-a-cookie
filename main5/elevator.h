@@ -69,6 +69,12 @@ public:
 		return currTarget;
 	}
 
+public:
+  void debug() {
+    arduino::printf("debug(h): f_best=%d, df_max=%d\n", f_best, df_max);
+    arduino::printf("position: lastTarget=%d, currTarget=%d\n", lastTarget, currTarget);
+  }
+
 private:
 	Stepper *stpZ;
 	unsigned long f_best, df_max;
