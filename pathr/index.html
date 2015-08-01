@@ -82,12 +82,30 @@
     #image > * {
       width: 100%;
     }
-    #image canvas {
+    #image.svg {
+    }
+    #image canvas, #image svg {
       display: block;
       width: 100%;
     }
-    #image svg {
+    #image #svg {
       display: none;
+      width: 100%;
+    }
+    #image.svg #canvas:before, #image.svg #svg:before {
+      cursor: pointer;
+      position: absolute;
+      top: 30px;
+      left: 30px;
+      color: #7493FF;
+      font-weight: bold;
+      border-bottom: 3px dotted #A4A4A4;
+    }
+    #image.svg #canvas:before {
+      content: "Path < SVG";
+    }
+    #image.svg #svg:before {
+      content: "Path > SVG";
     }
     #image svg path, #image svg rect {
       stroke-dasharray: 1000 !important;
@@ -96,9 +114,6 @@
     }
     #source {
       overflow: auto;
-    }
-    #data {
-      display: none;
     }
     @keyframes dash {
       from {
@@ -129,9 +144,6 @@
     <div id="right">
       No path code.
     </div>
-    <div id="data">
-      
-    </div>
     <script type="text/javascript" src="jquery.min.js"></script>
     <script type="text/javascript" src="dash.canvas.js"></script>
     <script type="text/javascript" src="urlexport.js"></script>
@@ -144,7 +156,7 @@
     <script type="text/javascript" src="svg2path.js"></script>
     <script type="text/javascript">
       var fileName = 'code';
-      var timeInterval = 30;
+      var timeInterval = 100;
       function updateCanvas(){
         var canvas = $('#canvas canvas');
         var path = canvas.data('path');
@@ -224,6 +236,15 @@
         setTimeout(updateCanvas, timeInterval);
       }
       function resetCode(type, data){
+        // store on source
+        if(type)
+          $('#source').data('type', type);
+        else
+          type = $('#source').data('type');
+        if(data)
+          $('#source').data('data', data);
+        else
+          data = $('#source').data('data');
         console.log('reset');
 
         // retrieve parameters
@@ -243,7 +264,7 @@
           // --- svg image --------------------------------
           case 'svg':
             path = svg2path($(data), params);
-            $('#svg').html($('#data').html());
+            $('#svg').hide().html(data);
             break;
 
           // --- g code -----------------------------------
@@ -257,8 +278,22 @@
         }
         $('#right').text(path.code);
         $('#canvas').children().remove();
-        $('<canvas />').appendTo('#canvas').data('path', path);
+        $('<canvas />').appendTo('#canvas').data('path', path).show();
         setTimeout(updateCanvas, timeInterval);
+
+        $('#image #svg, #image #canvas').click(function(){
+          var svg = $('#svg');
+          var canvas = $('#canvas');
+          if(svg.children().length){
+            svg.toggle();
+            canvas.toggle();
+          }
+        });
+        // special case to show we can click
+        if($('#svg').children().length)
+          $('#image').addClass('svg');
+        else
+          $('#image').removeClass('svg');
       }
     
       function loadFile(event){
@@ -292,7 +327,7 @@
       
       $(function(){
         $('#files').on('change', loadFile);
-        $('#scale').on('change keyup', resetCode);
+        $('#scale').on('change keyup', function(){ resetCode(); });
         $('#save').on('click', saveFile);
       });
     </script>
