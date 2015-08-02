@@ -15,7 +15,7 @@ function gcode2path(gcode, params){
   
   // frame
   var dec = function(v){
-    return Math.round(parseFloat(v) * scale);
+    return Math.round(parseFloat(v + '') * params.scale);
   };
   
   var lastFields = {
@@ -54,9 +54,9 @@ function gcode2path(gcode, params){
       var Z = getParam(fields, 'Z');
       if((!relative && Z != lastFields.Z) || (relative && Z)){
         if(relative){
-          path.elevateBy(Z);
+          path.elevateBy(dec(Z));
         } else {
-          path.elevateTo(Z);
+          path.elevateTo(dec(Z));
         }
         path.end();
       }
@@ -67,9 +67,9 @@ function gcode2path(gcode, params){
       if((!relative && (X != lastFields.X || Y != lastFields.Y))
          || (relative && (X || Y))){
         if(relative){
-          path.moveBy(X, Y);
+          path.moveBy(dec(X), dec(Y));
         } else {
-          path.moveTo(X, Y);
+          path.moveTo(dec(X), dec(Y));
         }
         path.end();
       }
