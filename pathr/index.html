@@ -112,6 +112,13 @@
         stroke-dashoffset: 1000;
         animation: dash 5s linear alternate infinite;
     }
+    #image button {
+      float: right;
+      height: 50px;
+      width: 50px;
+      margin-left: 10px;
+      cursor: pointer;
+    }
     #source {
       overflow: auto;
     }
@@ -134,6 +141,8 @@
     </header>
     <div id="left">
       <div id="image">
+        <button id="play">Play</button>
+        <button id="end">End</button>
         <div id="svg"></div>
         <div id="canvas"></div>
       </div>
@@ -157,6 +166,8 @@
     <script type="text/javascript">
       var fileName = 'code';
       var timeInterval = 100;
+      var playing = false;
+      var timeoutID = null;
       function updateCanvas(){
         var canvas = $('#canvas canvas');
         var path = canvas.data('path');
@@ -233,7 +244,8 @@
         // next time we do it again, at next stage
         iter = (iter + 1) % Math.max(1, path.points.length);
         canvas.data('iteration', iter); // updated iteration number
-        setTimeout(updateCanvas, timeInterval);
+        if(playing)
+          timeoutID = setTimeout(updateCanvas, timeInterval);
       }
       function resetCode(type, data){
         // store on source
@@ -279,7 +291,6 @@
         $('#right').text(path.code);
         $('#canvas').children().remove();
         $('<canvas />').appendTo('#canvas').data('path', path).show();
-        setTimeout(updateCanvas, timeInterval);
 
         $('#image #svg, #image #canvas').click(function(){
           var svg = $('#svg');
@@ -288,7 +299,37 @@
             svg.toggle();
             canvas.toggle();
           }
+          if(canvas.is(':visible')){
+            $('#play').show();
+            $('#end').show();
+          } else {
+            $('#play').hide();
+            $('#end').hide();
+          }
         });
+        $('#image #play').off('click').on('click', function(){
+          clearTimeout(timeoutID);
+          if(!playing){
+            // we restart the change
+            playing = true;
+            timeoutID = setTimeout(updateCanvas, timeInterval);
+          } else {
+            playing = false; // we stop the change
+          }
+          $('#image #play').text(playing ? 'Pause' : 'Play');
+        });
+        $('#image #end').off('click').on('click', function(){
+          clearTimeout(timeoutID);
+          playing = false;
+          $('#image #play').text('Play');
+          $('#canvas canvas').data('iteration', path.points.length - 1);
+          timeoutID = setTimeout(updateCanvas, timeInterval);
+        });
+        // stop change
+        clearTimeout(timeoutID);
+        playing = false;
+        $('#canvas canvas').data('iteration', path.points.length - 1); // set to the end
+        timeoutID = setTimeout(updateCanvas, timeInterval); // update drawing (no animation)
         // special case to show we can click
         if($('#svg').children().length)
           $('#image').addClass('svg');

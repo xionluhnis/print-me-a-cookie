@@ -11,7 +11,7 @@ function gcode2path(gcode, params){
   var lineReader = new LineReader(gcode || '');
   
   // path driver
-  var path = new Path();
+  var path = new Path('GCode to Path');
   
   // frame
   var dec = function(v){
@@ -62,8 +62,8 @@ function gcode2path(gcode, params){
       }
       
       // 4 = should we move in x/y?
-      var X = getParam(field, 'X');
-      var Y = getParam(field, 'Y');
+      var X = getParam(fields, 'X');
+      var Y = getParam(fields, 'Y');
       if((!relative && (X != lastFields.X || Y != lastFields.Y))
          || (relative && (X || Y))){
         if(relative){
@@ -141,42 +141,77 @@ function gcode2path(gcode, params){
     }
   };
   // parse every line, one by one
+  var lastGCommand = null;
   while(lineReader.available()){
     var line = lineReader.next();
-    currFields = {};
+    var currFields = {};
     // remove comments and needless spaces
     var free = line.replace(/;.*$/, '')
+                   .replace(/\([^)]*\)/g, '')
                    .replace(/( |\t)+/g, '');
     // split into tokens
-    var base = line.replace(/([a-zA-Z*]+)([-0-9.]+)/g, function(match, par, val){
+    var base = free.replace(/([a-zA-Z*]+)([-0-9.]+)/g, function(match, par, val){
       return par + ' ' + val;
     }).replace(/([-0-9.]+)([a-zA-Z*]+)/g, function(match, val, par){
       return val + ' ' + par;
     });
     var tokens = base.split(' ');
-    for(var i = 0; i < tokens.length; ++i){
-      var c = tokens[i].charAt(0);
-      var v = parseFloat(tokens[i].substring(1));
-      currFields[c] = v;
-    }
-    // find command
     var command = null;
-    var commandCodes = ['G', 'M', 'T'];
-    for(var i = 0; i < commandCodes.length; ++i){
-      var commandCode = commandCodes[i];
-      if(commandCode in currParams){
-        command = commandCode + currFields[commandCode];
+    var extraCommands = [];
+    var commandCodes = { G: true, M: true, T: true };
+    var implGCode = { X: true, Y: true, Z: true };
+    for(var i = 0; i < tokens.length; ++i){
+      if(tokens[i].match(/[a-zA-Z]+/)){
+        var c = tokens[i].toUpperCase();
+        // parameter?
+        if(i < tokens.length - 1 && tokens[i+1].match(/[0-9]+/)){
+          var v = parseFloat(tokens[i+1]);
+          currFields[c] = v;
+          ++i; // skip that value since we use it
+        } else {
+          // no parameter
+          currFields[c] = undefined;
+        }
+        // is it a command?
+        if(c in commandCodes){
+          var newCommand = c + currFields[c];
+          if(command){
+            extraCommands.push(newCommand);
+          } else {
+            command = newCommand;
+          }
+        } else if(!command && c in implGCode){
+          command = lastGCommand; // implicitely generate a command
+        }
+      } else {
+        // token is not a command or field!
+        console.log('Invalid token: %s', tokens[i]);
       }
     }
-    // compute path
+    // default to last command if there is one
+    if(!command){
+      console.log('No valid command: %s\n', line);
+      continue;
+    }
+    if(command.charAt(0) == 'G'){
+      lastGCommand = command;
+    }
+
+    // execute command
     if(command in parse){
       parse[command](currFields);
-      // save last params for next command
-      for(var k in currFields){
-        lastFields[k] = currFields[k];
-      }
     } else {
-      console.log('Unsupported command %s, line %d: %s\n', tokens[0], lineReader.line-1, line);
+      console.log('Unsupported command %s, line %d: %s\n', command, lineReader.line, line);
+    }
+    // execute extra commands
+    for(var i = 0; i < extraCommands.length; ++i){
+      var c = extraCommands[i];
+      if(c in parse)
+        parse[c](currFields);
+    }
+    // save last params for next command
+    for(var k in currFields){
+      lastFields[k] = currFields[k];
     }
   }
   
@@ -197,11 +232,11 @@ LineReader.prototype = {
     var j = this.text.indexOf('\n', this.i);
     var line = null;
     if(j > 0){
-      line = this.substring(this.i, j);
+      line = this.text.substring(this.i, j);
       this.i = j + 1;
       this.line += 1;
     } else {
-      line = this.substring(this.i);
+      line = this.text.substring(this.i);
       this.i = this.text.length;
     }
     return line;

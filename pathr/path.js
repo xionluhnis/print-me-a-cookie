@@ -87,9 +87,9 @@ function Path(welcome){
 // javascript commands
   resetPosition: function(x, y, z){
     this.__command('sxp', x)
-        .and
+        .and()
         .__command('syp', y)
-        .and
+        .and()
         .__command('szp', z).end();
     this.relPos = new Point(x || 0, y || 0);
     this.relZ = z || 0;

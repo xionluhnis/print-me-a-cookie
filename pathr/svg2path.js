@@ -8,7 +8,7 @@ function svg2path(root, params){
   if(!params.scale) params.scale = 100;
   
   // path driver
-  var path = new Path();
+  var path = new Path('SVG to Path');
   
   // frame
   var dec = function(v){
