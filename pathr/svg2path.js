@@ -110,7 +110,7 @@ function svg2path(root, params){
             i += 2;
             switch(mode){
               // move
-              case 'm': path.moveBy(pos.x, pos.y).end(); if(!firstPos) mode = 'L'; break;
+              case 'm': path.moveBy(pos.x, pos.y).end(); if(!firstPos) mode = 'l'; break;
               case 'M': path.moveTo(pos.x, pos.y).end(); if(!firstPos) mode = 'L'; break;
               // line
               case 'l': path.lineBy(pos.x, pos.y).end(); break;
