@@ -113,7 +113,7 @@ namespace gcode {
           execModalCommand(id);
           break;
         default:
-          error = ERR_INVALID_G_COMMAND;
+          error = ERR_INVALID_G_CODE;
           return;
       }
       hasX = hasY = hasZ = hasA = hasE = hasF = false;
