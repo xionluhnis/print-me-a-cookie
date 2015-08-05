@@ -51,80 +51,89 @@ namespace gcode {
   public:
 
     CommandReader() : input(NULL), locXY(NULL), locZ(NULL), stpE(NULL) {}
-    CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1000.0) : input(&s), line(s), locXY(xy), locZ(z), stpE(e), scale(f) {}
+    CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1000.0) : input(&s), line(s), locXY(xy), locZ(z), stpE(e), scale(f), metric(true) {}
     
 
     bool available(){
       return input && input->available();
     }
     void next(){
-      // start new line parser
-      line = LineParser(*input);
-
-      // currently parsed command
-      Field command;
-      while(line.available()){
-        Field field = readField();
-        if(!field) break;
-        switch(field.code){
-          
-          // implicit movement command
-          case 'X': hasX = true; X = convertToUnit(field.value); if(!command) command = Field('G', G); break;
-          case 'Y': hasY = true; Y = convertToUnit(field.value); if(!command) command = Field('G', G); break;
-          case 'Z': hasZ = true; Z = convertToUnit(field.value); if(!command) command = Field('G', G); break;
-          case 'A': hasA = true; A = convertToUnit(field.value); if(!command) command = Field('G', G); break;
-          case 'E': hasE = true; E = convertToUnit(field.value); if(!command) command = Field('G', G); break;
-          case 'F': hasF = true; F = convertToUnit(field.value); if(!command) command = Field('G', G); break;
-          
-          // move command
-          case 'G':
-          // modal command
-          case 'M': {
-            if(command){
-              execCommand(command);
-            }
-            command = field;
-          } break;
-
-          // parameters
-          case 'P': P = field.value; break;
-          case 'S': S = field.value; break;
-
-          // otherwise we ignore
-          default:
-            // let's just forget about it
-            break;
+      bool idle = true;
+      while(input->available() && idle){
+        // start new line parser
+        line = LineParser(*input);
+  
+        // currently parsed command
+        Field command;
+        while(line.available()){
+          Field field = readField();
+          if(!field) break;
+          switch(field.code){
+            
+            // implicit movement command
+            case 'X': hasX = true; X = convertToUnit(field.value); if(!command) command = Field('G', G); break;
+            case 'Y': hasY = true; Y = convertToUnit(field.value); if(!command) command = Field('G', G); break;
+            case 'Z': hasZ = true; Z = convertToUnit(field.value); if(!command) command = Field('G', G); break;
+            case 'A': hasA = true; A = convertToUnit(field.value); if(!command) command = Field('G', G); break;
+            case 'E': hasE = true; E = convertToUnit(field.value); if(!command) command = Field('G', G); break;
+            case 'F': hasF = true; F = convertToUnit(field.value); if(!command) command = Field('G', G); break;
+            
+            // move command
+            case 'G':
+            // modal command
+            case 'M': {
+              if(command){
+                bool res = execCommand(command);
+                if(res) idle = false;
+              }
+              command = field;
+            } break;
+  
+            // parameters
+            case 'P': P = field.value; break;
+            case 'S': S = field.value; break;
+  
+            // otherwise we ignore
+            default:
+              // let's just forget about it
+              break;
+          }
         }
-      }
-      // execute pending
-      if(command){
-        execCommand(command);
+        // execute pending
+        if(command){
+          bool res = execCommand(command);
+          if(res) idle = false;
+        }
       }
     }
 
     long convertToUnit(float value) const {
-      return (long)std::round(value * scale);
+      float factor = metric ? 1.0 : 25.4;
+      float mmToSteps = 5000.0 / 56.0;
+      return (long)std::round(factor * value * scale * mmToSteps); 
     }
 
   protected:
-    void execCommand(const Field &command){
+    bool execCommand(const Field &command){
       int id = int(command.value);
+      bool res = false;
       switch(command.code){
         case 'G':
-          execMoveCommand(id);
+          res = execMoveCommand(id);
           G = id; // store this command
           break;
         case 'M':
-          execModalCommand(id);
+          res = execModalCommand(id);
           break;
         default:
           error = ERR_INVALID_G_CODE;
-          return;
+          return false;
       }
       hasX = hasY = hasZ = hasA = hasE = hasF = false;
       P = S = 0L;
+      return res;
     }
-    void execMoveCommand(int id){
+    bool execMoveCommand(int id){
       switch(id){
         // --- rapid linear movement
         case 0:
@@ -177,7 +186,7 @@ namespace gcode {
               locXY->setTarget(xy + vec2(hasX ? X : 0, hasY ? Y : 0));
             }
           }
-        } break;
+        } return hasX || hasY || hasZ;
 
         // --- rotation (NOT SUPPORTED)
         case 2:
@@ -198,6 +207,10 @@ namespace gcode {
             delay(S * 1000); // seconds
           }
         } break;
+
+        // --- metric system
+        case 20: metric = false; break; // set to inches
+        case 21: metric = true; break; // set to millimeters
 
         // --- move to origin
         case 28: {
@@ -235,9 +248,10 @@ namespace gcode {
           }
         } break;
       }
+      return false;
     }
-    void execModalCommand(int id){
-      
+    bool execModalCommand(int id){
+      return false;
     }
     Field readField() {
       Field field;
@@ -273,7 +287,7 @@ namespace gcode {
     long X, Y, Z, A, E, F;
     bool hasX, hasY, hasZ, hasA, hasE, hasF;
     long lastE;
-    bool absolute;
+    bool absolute, metric;
     // extra parameters
     long P, S;
 

@@ -50,7 +50,7 @@ void process();
 bool idle();
 Stepper *selectStepper(char c);
 void readCommands(Stream& input = Serial);
-void processFile(File &file, bool gcode = false);
+void processFile(File &file, bool gcode, float scale);
 
 ///// Setup Arduino ////////////////////////////////////////////
 void setup() {
@@ -373,13 +373,14 @@ void readCommands(Stream& input){
       case 'o': {
         // open and execute file
         int fileID = command.readInt();
+        float scale = command.readFloat();
         if(fileID > 0){
           File &f = sdcard::open(fileID);
           Serial.print("Opening ");
           Serial.println(f.name());
           
           // execute content
-          processFile(f, type == 'g' || type == 'G');
+          processFile(f, type == 'g' || type == 'G', scale);
           
         } else {
           Serial.println("File ID must be strictly positive.");
@@ -516,7 +517,7 @@ void processNextLine(int state = 0){
   }
 }
 
-void processFile(File &file, bool gcode){
+void processFile(File &file, bool gcode, float scale){
   if(!file){
     Serial.println("No file to process!");
     file.close();
@@ -532,7 +533,7 @@ void processFile(File &file, bool gcode){
   locZ.setCallback(processNextLine); locZ.setState(gcode ? 1 : 0);
   // initialize potential gcode reader
   if(gcode){
-    gcodeReader = gcode::CommandReader(file, &locXY, &locZ, &stpE0);
+    gcodeReader = gcode::CommandReader(file, &locXY, &locZ, &stpE0, scale);
   }
 
   // read first line
