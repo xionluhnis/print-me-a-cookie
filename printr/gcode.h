@@ -48,7 +48,7 @@ namespace gcode {
   class CommandReader {
   public:
   
-    CommandReader(Stream &s, Locator *xy, Elevator *z, float f = 1000.0) : input(&s), line(&s), locXY(xy), locZ(z), scale(f) {}
+    CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1000.0) : input(&s), line(&s), locXY(xy), locZ(z), stpE(e), scale(f) {}
 
     bool available(){
       return input->available();
@@ -125,6 +125,37 @@ namespace gcode {
         case 0:
         // --- linear movement
         case 1: {
+          // extrusion
+          if(hasE){
+            lastE = E; // relative extrusion level
+            if(E == 0L){
+              stpE->moveToFreq(0L);
+            } else if(E > 0){
+              stpE->moveToFreq(10L);
+            } else {
+              stpE->moveToFreq(-10L);
+            }
+          } else if(hasA){
+            long dE = lastE - A; // relative extrusion level
+            lastE = A; // absolute extrusion level
+            if(dE == 0L){
+              stp->moveToFreq(0L);
+            } else if(dE > 0){
+              stp->moveToFreq(10L);
+            } else {
+              stp->moveToFreq(-10L);
+            }
+          } else {
+            // stop extrusion
+            stpE->moveToFreq(Stepper::IDLE_FREQ);
+          }
+
+          // speed
+          if(hasF){
+            // TODO change XYZ speed accordingly
+          }
+          
+          // movement
           if(hasZ){
             long curZ = locZ->target();
             if(absolute && curZ != Z){
@@ -193,7 +224,8 @@ namespace gcode {
               locZ->resetZ(Z);
             }
             if(hasE){
-              // TODO reset virtual extrusion level
+              // reset virtual extrusion level
+              lastE = E = 0L;
             }
           }
         } break;
@@ -229,11 +261,13 @@ namespace gcode {
     // positioning system
     Locator *locXY;
     Elevator *locZ;
+    Stepper *stpE;
 
     // positioning state
     int G;
     long X, Y, Z, A, E, F;
     bool hasX, hasY, hasZ, hasA, hasE, hasF;
+    long lastE;
     bool absolute;
     // extra parameters
     long P, S;
