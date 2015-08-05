@@ -14,7 +14,9 @@ enum ErrorType {
   ERR_INVALID_STEPPER  = 7,
   ERR_INVALID_ACCESSOR = 8,
   ERR_INVALID_ROUNDING = 9,
-  ERR_INVALID_SETTINGS = 10
+  ERR_INVALID_SETTINGS = 10,
+  ERR_INVALID_G_CODE   = 11,
+  ERR_FILE_PROC_STATE  = 12
 };
 
 int error;
@@ -53,6 +55,12 @@ void logError() {
     case ERR_INVALID_SETTINGS:
     	Serial.println("Invalid setting command!");
     	break;
+    case ERR_INVALID_G_CODE:
+      Serial.println("Invalid GCode command!");
+      break;
+    case ERR_FILE_PROC_STATE:
+      Serial.println("File processing state is not recognized.");
+      break;
     case -1:
       return;
     default:
