@@ -34,6 +34,8 @@ namespace gcode {
     char code;
     float value;
 
+    Field() : code('\0'), value(0.0) {}
+
     template <typename T>
     Field(char c, T v) : code(c), value(v) {}
 
@@ -47,20 +49,23 @@ namespace gcode {
   
   class CommandReader {
   public:
-  
-    CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1000.0) : input(&s), line(&s), locXY(xy), locZ(z), stpE(e), scale(f) {}
+
+    CommandReader() : input(NULL), locXY(NULL), locZ(NULL), stpE(NULL) {}
+    CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1000.0) : input(&s), line(s), locXY(xy), locZ(z), stpE(e), scale(f) {}
+    
 
     bool available(){
-      return input->available();
+      return input && input->available();
     }
     void next(){
       // start new line parser
       line = LineParser(*input);
 
       // currently parsed command
-      Field command, firstCommand;
-      Field field;
-      while(line.available() && field = readField()){
+      Field command;
+      while(line.available()){
+        Field field = readField();
+        if(!field) break;
         switch(field.code){
           
           // implicit movement command
@@ -104,7 +109,7 @@ namespace gcode {
   protected:
     void execCommand(const Field &command){
       int id = int(command.value);
-      switch(command.type){
+      switch(command.code){
         case 'G':
           execMoveCommand(id);
           G = id; // store this command
@@ -139,11 +144,11 @@ namespace gcode {
             long dE = lastE - A; // relative extrusion level
             lastE = A; // absolute extrusion level
             if(dE == 0L){
-              stp->moveToFreq(0L);
+              stpE->moveToFreq(0L);
             } else if(dE > 0){
-              stp->moveToFreq(10L);
+              stpE->moveToFreq(10L);
             } else {
-              stp->moveToFreq(-10L);
+              stpE->moveToFreq(-10L);
             }
           } else {
             // stop extrusion
@@ -246,7 +251,7 @@ namespace gcode {
       }
       if(!line.available())
         return field;
-      char n = line.peekFull();
+      char n = line.fullPeek();
       if(n == '-' || isDigit(n)){
         field.value = line.readFloat();
       }

@@ -50,7 +50,7 @@ void process();
 bool idle();
 Stepper *selectStepper(char c);
 void readCommands(Stream& input = Serial);
-void processFile(File &file);
+void processFile(File &file, bool gcode = false);
 
 ///// Setup Arduino ////////////////////////////////////////////
 void setup() {
@@ -516,7 +516,7 @@ void processNextLine(int state = 0){
   }
 }
 
-void processFile(File &file, bool gcode = false){
+void processFile(File &file, bool gcode){
   if(!file){
     Serial.println("No file to process!");
     file.close();
@@ -532,7 +532,7 @@ void processFile(File &file, bool gcode = false){
   locZ.setCallback(processNextLine); locZ.setState(gcode ? 1 : 0);
   // initialize potential gcode reader
   if(gcode){
-    gcodeReader = gcode::CommandReader(file, &locXY, &locZ);
+    gcodeReader = gcode::CommandReader(file, &locXY, &locZ, &stpE0);
   }
 
   // read first line

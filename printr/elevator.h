@@ -63,6 +63,9 @@ public:
 		callback = NULL;
 		state = 0;
 	}
+ void resetZ(long z){
+  stpZ->resetPosition(z);
+ }
 	
 	// --- getters ---------------------------------------------------------------
 	long target() const {

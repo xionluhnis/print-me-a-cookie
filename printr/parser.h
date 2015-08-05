@@ -21,6 +21,7 @@ bool isDigit(char c){
 class LineParser {
 public:
 
+  LineParser() : input(NULL), valid(false) {}
   explicit LineParser(Stream &s, LineParser *p = NULL) : input(&s), last('\0'), valid(true), parent(p) {}
 
   LineParser subline() {
