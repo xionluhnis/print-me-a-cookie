@@ -230,7 +230,7 @@ public:
 	
 	// --- checks ----------------------------------------------------------------
 	bool hasTarget() const {
-		return lastTarget != currTarget;
+		return lastTarget != currTarget || !hasReachedTarget();
 	}
 	bool isEnding() const {
 		return ending;

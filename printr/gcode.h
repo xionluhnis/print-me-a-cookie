@@ -62,6 +62,8 @@ namespace gcode {
       while(input->available() && idle){
         // start new line parser
         line = LineParser(*input);
+
+        Serial.print(". ");
   
         // currently parsed command
         Field command;
@@ -115,6 +117,7 @@ namespace gcode {
 
   protected:
     bool execCommand(const Field &command){
+      Serial.print('exec '); Serial.print(command.code); Serial.println(int(command.value), DEC);
       int id = int(command.value);
       bool res = false;
       switch(command.code){

@@ -3,6 +3,9 @@
 #include "Arduino.h"
 #include "utils.h"
 
+#define MAX_LONG 2147483647L
+#define MIN_LONG -2147483648L
+
 long sign(long l){
 	return l < 0 ? -1 : 1;
 }
@@ -38,8 +41,9 @@ public:
   // exceptional idle frequency case
   static const long IDLE_FREQ = 0L;
 
-  Stepper(int s, int d, int m1, int m2, int m3, int e, char id = '?')
-    : stp(s), dir(d), ms1(m1), ms2(m2), ms3(m3), en(e), ident(id) {
+  Stepper(int s, int d, int m1, int m2, int m3, int e, char id = '?', int o = LOW)
+    : stp(s), dir(d), ms1(m1), ms2(m2), ms3(m3), en(e), ident(id),
+      posDirSignal(o == LOW ? LOW : HIGH), negDirSignal(o == LOW ? HIGH : LOW) {
       enabled = false;
       // freq data
       count = 0L;
@@ -51,7 +55,10 @@ public:
       steps = 0L;
       stepMode = MS_SLOW;
       stepDelta = stepsForMode(stepMode);
-      stepDir = 1L; // = LOW
+      stepDir = posDirSignal;
+      // boundaries
+      maxSteps = MAX_LONG;
+      minSteps = MIN_LONG;
   }
   void setup() {
     pinMode(stp, OUTPUT);
@@ -68,8 +75,11 @@ public:
     df = 1L;
     f_safe = 5L;
     count = f_cur = f_trg = f_mem = 0L;
+    maxSteps = MAX_LONG;
+    minSteps = MIN_LONG;
+    stepDir = 1L;
     digitalWrite(stp, LOW);
-    digitalWrite(dir, LOW);
+    digitalWrite(dir, posDirSignal);
     microstep(MS_SLOW);
     disable();
   }
@@ -80,7 +90,7 @@ public:
       // Serial.println(ident);
       triggerUpdate();
     }
-  	if(isTriggering()){
+  	if(isTriggering() && canTrigger()){
       // arduino::printf("Trigger %c up\n", ident);
       enable();
   		digitalWrite(stp, HIGH);
@@ -137,7 +147,32 @@ public:
   	f_trg = f; // this is our new target
   }
   void resetPosition(long absoluteSteps = 0){
+    long delta = absoluteSteps - steps; // remember transformation
   	steps = absoluteSteps;
+    
+    // apply transformation to min/max
+    if(minSteps != MIN_LONG){
+      if(delta < 0L)
+        minSteps = std::max<long>(MIN_LONG - delta, minSteps) + delta; // avoid underflow
+      else
+        minSteps += delta;
+    }
+    if(maxSteps != MAX_LONG){
+      if(delta > 0L)
+        maxSteps = std::min<long>(MAX_LONG - delta, maxSteps) + delta; // avoid overflow
+      else
+        minSteps += delta;
+    }
+  }
+  void setMaxSteps(long maxValue){
+    maxSteps = maxValue;
+    // reset current steps to be within bounds (so we don't get stuck out of bounds)
+    if(steps > maxSteps) steps = maxSteps;
+  }
+  void setMinSteps(long minValue){
+    minSteps = minValue;
+    // reset current steps to be within bounds
+    if(steps < minSteps) steps = minSteps;
   }
   void setDeltaFreq(unsigned long deltaF = 1L){
   	df = deltaF;
@@ -213,8 +248,9 @@ protected:
     count = 0L; // reset
     long f_tmp = f_cur;
     f_cur = updateFreq(f_cur, f_trg);
-    // prevent oscillation
-    if(f_cur != f_tmp && f_cur == f_mem){
+    // prevent oscillation (special case for IDLE)
+    if(f_cur != f_tmp && f_cur == f_mem
+    && f_tmp != IDLE_FREQ){
       // revert change
       f_cur = f_tmp;
     } else {
@@ -231,12 +267,19 @@ protected:
     if(f_cur * stepDir < 0L){
       stepDir = sign(f_cur);
       // arduino::printf("Changing dir of '%c'.\n", ident);
-      digitalWrite(dir, stepDir > 0L ? LOW : HIGH);
+      digitalWrite(dir, stepDir > 0L ? posDirSignal : negDirSignal);
     }
   }
   
   bool isTriggering() const {
   	return f_cur && count >= std::abs(f_cur);
+  }
+  bool canTrigger() const {
+    long nextStep = steps + stepDir * stepDelta;
+    if(stepDir < 0)
+      return nextStep > minSteps;
+    else
+      return nextStep < maxSteps;
   }
 
   bool isFrozen() const {
@@ -302,9 +345,12 @@ public:
     Serial.print("count  "); Serial.println(count, DEC);
     Serial.print("f_cur  "); Serial.println(f_cur, DEC);
     Serial.print("f_trg  "); Serial.println(f_trg, DEC);
+    Serial.print("f_mem  "); Serial.println(f_mem, DEC);
     Serial.print("df     "); Serial.println(df, DEC);
     Serial.print("f_safe "); Serial.println(f_safe, DEC);
-    Serial.print(ident); Serial.print(", "); Serial.print(steps, DEC); Serial.print(", "); Serial.print(stepDelta, DEC); Serial.print(", "); Serial.println(stepDir, DEC);
+    Serial.print(ident); Serial.print(", "); Serial.print(steps, DEC); Serial.print(", ");
+      Serial.print(stepDelta, DEC); Serial.print(", "); Serial.print(stepDir, DEC); Serial.print(" in [");
+      Serial.print(minSteps, DEC); Serial.print(", "); Serial.print(maxSteps, DEC); Serial.println("]");
     //arduino::printf("position: stepMode=%d, steps=%d, stepDelta=%d, stepDir=%d\n",
     //                stepMode, steps, stepDelta, stepDir);
   }
@@ -328,6 +374,14 @@ private:
   long steps;			// reference number of steps
   long stepDelta; // step size
   long stepDir;		// step direction
+  
+  // signal interpretation
+  int posDirSignal; // positive direction signal
+  int negDirSignal;
+
+  // boundaries
+  long maxSteps;
+  long minSteps;
 
   // state
   bool enabled;

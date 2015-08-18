@@ -16,7 +16,8 @@ enum ErrorType {
   ERR_INVALID_ROUNDING = 9,
   ERR_INVALID_SETTINGS = 10,
   ERR_INVALID_G_CODE   = 11,
-  ERR_FILE_PROC_STATE  = 12
+  ERR_FILE_PROC_STATE  = 12,
+  ERR_MAX_LISTENERS    = 13
 };
 
 int error;
@@ -60,6 +61,9 @@ void logError() {
       break;
     case ERR_FILE_PROC_STATE:
       Serial.println("File processing state is not recognized.");
+      break;
+    case ERR_MAX_LISTENERS:
+      Serial.println("Too many listeners on event source.");
       break;
     case -1:
       return;

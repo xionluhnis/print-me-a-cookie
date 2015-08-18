@@ -8,6 +8,7 @@
 #include "locator.h"
 #include "elevator.h"
 #include "gcode.h"
+#include "event.h"
 
 // delays in milliseconds
 #define delayFunc delayMicroseconds
@@ -25,7 +26,7 @@
 Stepper stpE0(2, 3, 4, 5, 6, 7, 'e');
 Stepper stpY(8, 9, 10, 11, 12, 13, 'y');
 Stepper stpZ(22, 23, 24, 25, 26, 27, 'z');
-Stepper stpX(28, 29, 30, 31, 32, 33, 'x');
+Stepper stpX(28, 29, 30, 31, 32, 33, 'x', HIGH); // /!\ reversed X
 
 #define NUM_STEPPERS 4
 Stepper *steppers[NUM_STEPPERS];
@@ -61,7 +62,7 @@ void setup() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->setup();
   }
-  Serial.begin(250000); //Open Serial connection for debugging
+  Serial.begin(115200); //Open Serial connection for debugging
 
   // sd card setup
   sdcard::begin();
@@ -71,12 +72,53 @@ void setup() {
 }
 
 ///// React to external input //////////////////////////////////
+#define SWITCH_FIRST 11
+#define SWITCH_X_MIN 11
+#define SWITCH_X_MAX 12
+#define SWITCH_Y_MIN 13
+#define SWITCH_Y_MAX 14
+#define SWITCH_Z_MIN 15
+#define SWITCH_LAST  15
+#define NUM_SWITCHES (SWITCH_LAST - SWITCH_FIRST + 1)
+// buffer for time delaying checks
+long lastSwitchCheck[NUM_SWITCHES];
+EventSource switchEvent;
+
 void react() {
-  int s = analogRead(15);
-  if(s){
-    // resetAll();
+  long thisTime = millis();
+  for(int i = SWITCH_FIRST; i <= SWITCH_LAST; ++i){
+    if(thisTime - lastSwitchCheck[i - SWITCH_FIRST] < 300L){
+      continue;
+    }
+    // /!\ the switches randomly generate low values from time to time
+    //  => cannot fully be trusted unless the value is high enough
+    int s = analogRead(i);
+    if(s > 4){
+      lastSwitchCheck[i - SWITCH_FIRST] = thisTime; // remember time so we don't check too soon again
+      switch(i){
+        case SWITCH_X_MIN:
+          stpX.setMinSteps(stpX.value());
+          break;
+        case SWITCH_X_MAX:
+          stpX.setMaxSteps(stpX.value());
+          break;
+        case SWITCH_Y_MIN:
+          stpY.setMinSteps(stpY.value());
+          break;
+        case SWITCH_Y_MAX:
+          stpY.setMaxSteps(stpY.value());
+          break;
+        case SWITCH_Z_MIN:
+          stpZ.setMinSteps(stpZ.value());
+          break;
+        default:
+          Serial.println("AnalogRead: invalid entry!");
+          continue;
+      }
+      switchEvent.trigger(i);
+      Serial.print("Switch#"); Serial.print(i, DEC); Serial.print(" ~"); Serial.println(s, DEC);
+    }
   }
-  // Serial.print("switch: "); Serial.println(s, DEC);
 }
 
 ///// Process events ///////////////////////////////////////////
