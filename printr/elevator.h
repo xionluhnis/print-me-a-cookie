@@ -65,8 +65,8 @@ public:
 		state = s0;
 	}
 	void reset(){
-		f_best = 5L;
-		df_max = 42L;
+		f_best = 1L;
+		df_max = 2L;
 		lastTarget = currTarget = stpZ->value();
 		callback = NULL;
 		state = 0;

@@ -189,8 +189,8 @@ public:
 		state = s0;
 	}
 	void reset() {
-		f_best = 5L;
-		df_max = 24L;
+		f_best = 1L;
+		df_max = 2L;
 		epsilonSq = 400L;
 		lastTarget = currTarget = value();
     ending = true;

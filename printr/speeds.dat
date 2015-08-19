@@ -1,0 +1,20 @@
+# Correct frequencies (as periods)
+
+ux/y16: (microsteps)
+1,2,3,4,5 (maybe larger)
+
+ux/y8:
+1,2,3
+
+ux4:
+1,2,3
+
+ux1/2: 1,2,3 BUT shakes everything and switches don’t react fast enough 
+
+— z values — 
+uz1: 2
+uz2: 1,2
+uz4: all
+uz8: all
+uz16: all
+

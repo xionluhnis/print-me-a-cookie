@@ -110,6 +110,11 @@ public:
   		++count;
       // Serial.print("running for count=");
       // Serial.println(count, DEC);
+      
+      // if we went too far, stop everything now
+      if(!canTrigger()){
+        f_trg = f_cur = IDLE_FREQ;
+      }
   	}
   }
   
