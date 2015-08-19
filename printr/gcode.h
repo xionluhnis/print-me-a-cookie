@@ -51,7 +51,9 @@ namespace gcode {
   public:
 
     CommandReader() : input(NULL), locXY(NULL), locZ(NULL), stpE(NULL) {}
-    CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1000.0) : input(&s), line(s), locXY(xy), locZ(z), stpE(e), scale(f), metric(true) {}
+    CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1000.0) : input(&s), line(s), locXY(xy), locZ(z), stpE(e), scale(f), metric(true) {
+      X = Y = Z = A = E = F = P = S = 0;  
+    }
     
 
     bool available(){
@@ -162,8 +164,8 @@ namespace gcode {
             } else {
               stpE->moveToFreq(-10L);
             }
-          } else {
-            // stop extrusion
+          } else if(A){
+            // stop extrusion?
             stpE->moveToFreq(Stepper::IDLE_FREQ);
           }
 

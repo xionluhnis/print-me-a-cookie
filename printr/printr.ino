@@ -191,7 +191,36 @@ void readCommands(Stream& input){
       // --- reset all processes (needed in case of error)
       case 'r':
       case 'R': {
-        resetAll();
+        char c = command.readFullChar();
+        switch(c){
+          case 'X':
+          case 'x':
+            stpX.reset();
+            break;
+          case 'Y':
+          case 'y':
+            stpY.reset();
+            break;
+          case 'Z':
+          case 'z':
+            stpZ.reset();
+            break;
+          case 'E':
+          case 'e':
+            stpE0.reset();
+            break;
+          case 'M':
+          case 'm':
+            locXY.reset();
+            break;
+          case 'H':
+          case 'h':
+            locZ.reset();
+            break;
+          default:
+            resetAll();
+            break;
+        }
       } break;
 
       // --- disable switch on steppers
