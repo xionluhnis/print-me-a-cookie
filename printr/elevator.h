@@ -16,15 +16,14 @@ public:
 	void update(){
     if(!enabled) return;
 		// were we moving?
-		if(lastTarget == currTarget){
+		if(!hasTarget()){
+      // Serial.println("No Z target");
 			stpZ->moveToFreq(Stepper::IDLE_FREQ);
 			return;
 		}
 		// are we done moving?
-		long currDelta = stpZ->value() - currTarget;
-		long fullDelta = lastTarget - currTarget;
-		if(currDelta * fullDelta <= 0L
-		|| std::abs(currDelta) < stpZ->stepSize()){
+		if(hasReachedTarget()){
+      // Serial.println("Reached H target");
 			stpZ->moveToFreq(Stepper::IDLE_FREQ);
 			if(callback){
 				callback(state);
@@ -32,16 +31,24 @@ public:
 			lastTarget = currTarget;
 		} else {
 			// move at the best frequency (directly)
-			stpZ->moveToFreq(f_best);
+			stpZ->moveToFreq(bestFreq(realDelta()));
 			stpZ->setSafeFreq(f_best);
 			stpZ->setDeltaFreq(df_max);
+      // Serial.print("Freq: "); Serial.println(stpZ->targetFreq());
 		}
 	}
+
+  long bestFreq(long delta) const {
+    return sign(delta) * f_best;
+  }
 	
 	// --- setters ---------------------------------------------------------------
 	void setTarget(long z){
 		lastTarget = currTarget;
 		currTarget = z;
+    //Serial.print("New targets: ");
+    //Serial.print(lastTarget); Serial.print(" -> "); Serial.println(currTarget);
+    //Serial.print("Current: "); Serial.println(stpZ->value());
 	}
 	void setBestFreq(unsigned long f){
 		if(f)
@@ -85,11 +92,30 @@ public:
   bool isEnabled() const {
     return enabled;
   }
+  long realDelta() const {
+    return currTarget - stpZ->value();
+  }
+  long currDelta() const {
+    return currTarget - lastTarget;
+  }
+
+  // --- checks ---
+  bool hasTarget() const {
+    return lastTarget != currTarget || !hasReachedTarget();
+  }
+  bool hasReachedTarget() const {
+    long currDelta = stpZ->value() - currTarget;
+    long fullDelta = lastTarget - currTarget;
+    return currDelta * fullDelta < 0L || std::abs(currDelta) < stpZ->stepSize();
+  }
 
 public:
   void debug() {
-    arduino::printf("debug(h): f_best=%d, df_max=%d\n", f_best, df_max);
-    arduino::printf("position: lastTarget=%d, currTarget=%d\n", lastTarget, currTarget);
+    Serial.println("debug(h):");
+    Serial.print("f_best "); Serial.println(f_best, DEC);
+    Serial.print("df_max "); Serial.println(df_max, DEC);
+    Serial.print("lastTg "); Serial.println(lastTarget, DEC);
+    Serial.print("currTg "); Serial.println(currTarget, DEC);
   }
 
 private:
@@ -107,3 +133,5 @@ private:
   // state
   bool enabled;
 };
+
+

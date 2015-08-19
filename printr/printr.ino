@@ -66,14 +66,19 @@ void setup() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     steppers[i]->setup();
   }
-  Serial.begin(115200); //Open Serial connection for debugging
+  Serial.begin(250000); // Open Serial connection for debugging
 
   // sd card setup
   sdcard::begin();
 
+  // axis ranges
+  stpX.setRange(28067UL);
+  stpY.setRange(13693UL);
+  stpZ.setRange(122100UL); // to be set at print time to be close to plate
+
   // global callbacks
   idleCallback = errorCallback = NULL;
-  switchCallback = resetToHome;
+  // switchCallback = resetToHome;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -89,7 +94,7 @@ void setup() {
 #define NUM_SWITCHES (SWITCH_LAST - SWITCH_FIRST + 1)
 // buffer for time delaying checks
 long lastSwitchCheck[NUM_SWITCHES];
-
+int switchThreshold = 0;
 void react() {
   long thisTime = millis();
   for(int i = SWITCH_FIRST; i <= SWITCH_LAST; ++i){
@@ -99,7 +104,7 @@ void react() {
     // /!\ the switches randomly generate low values from time to time
     //  => cannot fully be trusted unless the value is high enough
     int s = analogRead(i);
-    if(s > 4){
+    if(s > switchThreshold){
       lastSwitchCheck[i - SWITCH_FIRST] = thisTime; // remember time so we don't check too soon again
       switch(i){
         case SWITCH_X_MIN:
@@ -170,7 +175,7 @@ void resetAll(int state = 0){
   // remove callbacks
   idleCallback = NULL;
   errorCallback = NULL;
-  switchCallback = resetAll;
+  // switchCallback = resetAll;
   Serial.println("Reset.");
 }
 void setHome(int){
@@ -269,6 +274,8 @@ void readCommands(Stream& input){
         char c = command.readFullChar();
         if(c == 'm' || c == 'M'){
           locXY.toggle();
+        } else if(c == 'h' || c == 'H'){
+          locZ.toggle();
         }
       } break;
 
@@ -355,10 +362,11 @@ void readCommands(Stream& input){
 
       // --- elevateto z
       // --- elevateby dz
-      case 'Z':
-      case 'z': {
+      case 'H':
+      case 'h': {
         long z = command.readLong();
-        if(type == 'z') z += locZ.target(); // relative to absolute
+        if(type == 'h') z += locZ.target(); // relative to absolute
+        Serial.print("H "); Serial.println(z, DEC);
         locZ.setTarget(z);
       } return; // release input reading
       
@@ -367,6 +375,8 @@ void readCommands(Stream& input){
       case 'x':
       case 'Y':
       case 'y':
+      case 'Z':
+      case 'z':
       case 'E':
       case 'e': {
         Stepper *stp = selectStepper(type);
@@ -397,6 +407,15 @@ void readCommands(Stream& input){
               stp->setDeltaFreq(command.readULong());
             } else if(c1 == 'f' && c2 == 's'){
               stp->setSafeFreq(command.readULong());
+            } else if(c1 == 'r' && c2 == 'g'){
+              unsigned long range = command.readULong();
+              if(range){
+                stp->setRange(range);
+              }
+              Serial.print("Range of "); 
+              Serial.print(c);
+              Serial.print(": ");
+              Serial.println(stp->range(), DEC);
             } else {
               error = ERR_INVALID_SETTINGS;
               return;
@@ -436,6 +455,19 @@ void readCommands(Stream& input){
               error = ERR_INVALID_SETTINGS;
               return;
             }
+          } break;
+
+          // - switch settings
+          case 'S':
+          case 's': {
+             char c1 = command.readFullChar();
+             if(c1 == 't' || c1 == 'T'){
+                switchThreshold = command.readInt();
+                Serial.print("New switch threshold: ");
+                Serial.println(switchThreshold, DEC);
+             } else {
+                error = ERR_INVALID_SETTINGS;
+             }
           } break;
           
           default:

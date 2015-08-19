@@ -243,7 +243,7 @@ public:
 	}
 	bool hasReachedTarget() const {
 		vec2 r = realDelta(), d = currDelta();
-		return r.dot(d) <= 0L
+		return r.dot(d) < 0L
 				|| r.sqLength() <= epsilonSq;
 	}
 	bool isMoving() const {
@@ -292,3 +292,5 @@ private:
   // state
   bool enabled;
 };
+
+

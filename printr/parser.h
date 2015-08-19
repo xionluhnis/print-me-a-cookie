@@ -191,3 +191,5 @@ private:
   bool valid;     // whether the parser is valid
   LineParser *parent;
 };
+
+

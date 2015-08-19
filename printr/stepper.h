@@ -216,6 +216,9 @@ public:
   long minValue() const {
     return minSteps;
   }
+  unsigned long range() const {
+    return stepRange;
+  }
   
   // --- estimators ------------------------------------------------------------
   unsigned long timeBetweenFreq(long f_c, long f_t, long df) const {
@@ -412,3 +415,5 @@ private:
   // state
   bool enabled;
 };
+
+
