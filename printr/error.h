@@ -17,7 +17,8 @@ enum ErrorType {
   ERR_INVALID_SETTINGS = 10,
   ERR_INVALID_G_CODE   = 11,
   ERR_FILE_PROC_STATE  = 12,
-  ERR_MAX_LISTENERS    = 13
+  ERR_BOUNDARY_TYPE    = 13,
+  ERR_MISSING_RANGE    = 14
 };
 
 int error;
@@ -62,8 +63,11 @@ void logError() {
     case ERR_FILE_PROC_STATE:
       Serial.println("File processing state is not recognized.");
       break;
-    case ERR_MAX_LISTENERS:
-      Serial.println("Too many listeners on event source.");
+    case ERR_BOUNDARY_TYPE:
+      Serial.println("Unsupported boundary event.");
+      break;
+    case ERR_MISSING_RANGE:
+      Serial.println("Cannot calibrate without stepper range values.");
       break;
     case -1:
       return;

@@ -201,6 +201,12 @@ public:
   void toggle(){
     enabled = !enabled;
   }
+  void enable(){
+    enabled = true;
+  }
+  void disable(){
+    enabled = true;
+  }
 	
 	// --- getters ---------------------------------------------------------------
 	vec2 value() const {
@@ -243,6 +249,9 @@ public:
 	bool isMoving() const {
 		return stpX->isRunning() || stpY->isRunning();
 	}
+  bool isEnabled() const {
+    return enabled;
+  }
 	
 protected:
 	Stepper *stepper(int i) const {

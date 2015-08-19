@@ -59,6 +59,7 @@ public:
       // boundaries
       maxSteps = MAX_LONG;
       minSteps = MIN_LONG;
+      stepRange = 0L;
   }
   void setup() {
     pinMode(stp, OUTPUT);
@@ -164,15 +165,30 @@ public:
         minSteps += delta;
     }
   }
-  void setMaxSteps(long maxValue){
+  void setMaxValue(long maxValue, bool rangeUpdate = true){
     maxSteps = maxValue;
     // reset current steps to be within bounds (so we don't get stuck out of bounds)
     if(steps > maxSteps) steps = maxSteps;
+
+    // propagate range
+    if(stepRange && rangeUpdate) setMinValue(maxSteps - stepRange, false);
   }
-  void setMinSteps(long minValue){
+  void setMinValue(long minValue, bool rangeUpdate = true){
     minSteps = minValue;
     // reset current steps to be within bounds
     if(steps < minSteps) steps = minSteps;
+
+    // propagate range
+    if(stepRange && rangeUpdate) setMaxValue(minSteps + stepRange, false);
+  }
+  void setRange(unsigned long range){
+    stepRange = range;
+    // /!\ both minSteps and maxSteps should not be already set, else one will be cleared
+    if(minSteps != MIN_LONG){
+      setMaxValue(minSteps + stepRange, false);
+    } else if(maxSteps != MAX_LONG){
+      setMinValue(maxSteps - stepRange, false);
+    }
   }
   void setDeltaFreq(unsigned long deltaF = 1L){
   	df = deltaF;
@@ -193,6 +209,12 @@ public:
   }
   unsigned long stepSize() const {
   	return stepDelta;
+  }
+  long maxValue() const {
+    return maxSteps;
+  }
+  long minValue() const {
+    return minSteps;
   }
   
   // --- estimators ------------------------------------------------------------
@@ -240,6 +262,9 @@ public:
   }
   bool hasCorrectDirection() const {
   	return f_cur * f_trg >= 0L;
+  }
+  bool hasRange() const {
+    return stepRange != 0L;
   }
 
 protected:
@@ -382,6 +407,7 @@ private:
   // boundaries
   long maxSteps;
   long minSteps;
+  unsigned long stepRange;
 
   // state
   bool enabled;

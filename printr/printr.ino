@@ -8,7 +8,6 @@
 #include "locator.h"
 #include "elevator.h"
 #include "gcode.h"
-#include "event.h"
 
 // delays in milliseconds
 #define delayFunc delayMicroseconds
@@ -39,7 +38,9 @@ Elevator locZ(&stpZ);
 typedef void (*Callback)(int state);
 
 // global callbacks
-Callback idleCallback, errorCallback;
+Callback idleCallback = NULL;    // called when idle
+Callback errorCallback = NULL;   // called when an error occurs
+Callback switchCallback = NULL;  // called upon hitting a switch
 
 //
 // declaration of functions
@@ -52,8 +53,11 @@ bool idle();
 Stepper *selectStepper(char c);
 void readCommands(Stream& input = Serial);
 void processFile(File &file, bool gcode, float scale);
+void calibrateHome(Callback cb, int switchEvent);
 
+////////////////////////////////////////////////////////////////
 ///// Setup Arduino ////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 void setup() {
   steppers[0] = &stpE0;
   steppers[1] = &stpY;
@@ -69,9 +73,12 @@ void setup() {
 
   // global callbacks
   idleCallback = errorCallback = NULL;
+  switchCallback = resetToHome;
 }
 
+////////////////////////////////////////////////////////////////
 ///// React to external input //////////////////////////////////
+////////////////////////////////////////////////////////////////
 #define SWITCH_FIRST 11
 #define SWITCH_X_MIN 11
 #define SWITCH_X_MAX 12
@@ -82,7 +89,6 @@ void setup() {
 #define NUM_SWITCHES (SWITCH_LAST - SWITCH_FIRST + 1)
 // buffer for time delaying checks
 long lastSwitchCheck[NUM_SWITCHES];
-EventSource switchEvent;
 
 void react() {
   long thisTime = millis();
@@ -97,31 +103,35 @@ void react() {
       lastSwitchCheck[i - SWITCH_FIRST] = thisTime; // remember time so we don't check too soon again
       switch(i){
         case SWITCH_X_MIN:
-          stpX.setMinSteps(stpX.value());
+          stpX.setMinValue(stpX.value());
           break;
         case SWITCH_X_MAX:
-          stpX.setMaxSteps(stpX.value());
+          stpX.setMaxValue(stpX.value());
           break;
         case SWITCH_Y_MIN:
-          stpY.setMinSteps(stpY.value());
+          stpY.setMinValue(stpY.value());
           break;
         case SWITCH_Y_MAX:
-          stpY.setMaxSteps(stpY.value());
+          stpY.setMaxValue(stpY.value());
           break;
         case SWITCH_Z_MIN:
-          stpZ.setMinSteps(stpZ.value());
+          stpZ.setMinValue(stpZ.value());
           break;
         default:
           Serial.println("AnalogRead: invalid entry!");
           continue;
       }
-      switchEvent.trigger(i);
+      if(switchCallback){
+        switchCallback(i);
+      }
       Serial.print("Switch#"); Serial.print(i, DEC); Serial.print(" ~"); Serial.println(s, DEC);
     }
   }
 }
 
+////////////////////////////////////////////////////////////////
 ///// Process events ///////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 void process() {
   // update location
   locXY.update();
@@ -138,7 +148,9 @@ void process() {
   delayFunc(DELAY_AFTER);
 }
 
+////////////////////////////////////////////////////////////////
 ///// Check if idle ////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 bool idle() {
   for(int i = 0; i < NUM_STEPPERS; ++i){
     if(steppers[i]->isRunning()) return false;
@@ -146,8 +158,10 @@ bool idle() {
   return true;
 }
 
+////////////////////////////////////////////////////////////////
 ///// Reset states and errors //////////////////////////////////
-void resetAll(){
+////////////////////////////////////////////////////////////////
+void resetAll(int state = 0){
   for(int i = 0; i < NUM_STEPPERS; ++i)
     steppers[i]->reset();
   locXY.reset();
@@ -156,10 +170,26 @@ void resetAll(){
   // remove callbacks
   idleCallback = NULL;
   errorCallback = NULL;
+  switchCallback = resetAll;
   Serial.println("Reset.");
 }
+void setHome(int){
+  long minX, minY;
+  stpX.resetPosition(0L); minX = stpX.minValue(); stpX.reset(); stpX.setMinValue(minX);
+  stpY.resetPosition(0L); minY = stpY.minValue(); stpY.reset(); stpY.setMinValue(minY);
+  locXY.reset();
+}
+void resetToHome(int switchEvent) {
+  // 1 = reset everything
+  resetAll();
 
+  // 2 = go to center (while trusting the stepper positions)
+  calibrateHome(setHome, switchEvent);
+}
+
+////////////////////////////////////////////////////////////////
 ///// Process commands /////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 void readCommands(Stream& input){
   while(input.available() && error <= ERR_NONE){
     // full line parser
@@ -425,6 +455,12 @@ void readCommands(Stream& input){
         delay(time);
       } break;
 
+      // --- calibrate / homing
+      case 'C':
+      case 'c':
+        calibrateHome(NULL, 0);
+        break;
+
       /**
        * Successful commands
        * 
@@ -491,7 +527,9 @@ Stepper *selectStepper(char c){
   return stp;
 }
 
+////////////////////////////////////////////////////////////////
 ///// Processing loop //////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 void loop() {
   // show errors
   logError();
@@ -542,7 +580,9 @@ void loop() {
   Serial.flush();
 }
 
+////////////////////////////////////////////////////////////////
 ///// File processing //////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 gcode::CommandReader gcodeReader;
 void processFileError(int error){
   // we stop the file processing
@@ -595,8 +635,6 @@ void processFile(File &file, bool gcode, float scale){
     return;
   }
 
-  // TODO global positioning and setup
-
   // process file lines one by one
   // => set callbacks and states
   errorCallback = processFileError;
@@ -609,5 +647,74 @@ void processFile(File &file, bool gcode, float scale){
 
   // read first line
   processNextLine(gcode ? 1 : 0);
+}
+
+////////////////////////////////////////////////////////////////
+///// Homing ///////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
+int homeStatus;
+Callback homeCallback;
+void homeCheckEvent(int which){
+  homeStatus |= which;
+  if(homeStatus == B11){
+    if(homeCallback){
+      Callback cb = homeCallback;
+      homeCallback = NULL;
+      cb(which);
+    }
+  }
+}
+void boundaryEvent(int which){
+  switch(which){
+    case SWITCH_X_MAX:
+      homeStatus |= 1 << 0;
+      break;
+    case SWITCH_Y_MAX:
+      homeStatus |= 1 << 1;
+      break;
+    case SWITCH_Z_MIN:
+      homeStatus |= 1 << 2;
+      break;
+    default:
+      error = ERR_BOUNDARY_TYPE;
+      break;
+  }
+  // if all switches have been hit, we're done
+  if(homeStatus == 111){
+    homeStatus = 0; // reset homing status
+    switchCallback = NULL;
+    // renable XYZ
+    // TODO move to the correct location!
+    vec2 homeLoc((stpX.maxValue() - stpX.minValue()) / 2L, (stpY.maxValue() - stpY.minValue()) / 2L);
+    locXY.enable(); locXY.setState(1 << 0); locXY.setCallback(homeCheckEvent); locXY.setTarget(homeLoc);
+    locZ.enable();  locZ.setState(1 << 1);  locZ.setCallback(homeCheckEvent);  locZ.setTarget(stpZ.maxValue());
+    homeCheckEvent(1 << 1);
+  }
+}
+void calibrateHome(Callback cb, int switchEvent){
+  homeStatus = 0;
+  if(switchEvent > 0){
+    // we can trust the positions
+    // => we just move to home
+    locXY.setTarget(vec2(0, 0));
+    if(cb){
+      locXY.setCallback(cb);
+    }
+  } else {
+    if(!stpX.hasRange() || !stpY.hasRange() || !stpZ.hasRange()){
+      error = ERR_MISSING_RANGE;
+      return;
+    }
+    // set callbacks
+    switchCallback = boundaryEvent;
+    homeCallback = cb;
+    // disable normal positiong
+    locXY.disable();
+    locZ.disable();
+    // go to switches in both X and Y
+    stpX.moveToFreq(1L);
+    stpY.moveToFreq(1L);
+    stpZ.moveToFreq(-1L);
+  }
 }
 

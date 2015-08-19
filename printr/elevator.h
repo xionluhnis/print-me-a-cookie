@@ -14,6 +14,7 @@ public:
 	}
 	
 	void update(){
+    if(!enabled) return;
 		// were we moving?
 		if(lastTarget == currTarget){
 			stpZ->moveToFreq(Stepper::IDLE_FREQ);
@@ -62,15 +63,28 @@ public:
 		lastTarget = currTarget = stpZ->value();
 		callback = NULL;
 		state = 0;
+    enabled = true;
 	}
- void resetZ(long z){
-  stpZ->resetPosition(z);
- }
+  void resetZ(long z){
+    stpZ->resetPosition(z);
+  }
+  void toggle(){
+    enabled = !enabled;
+  }
+  void enable(){
+    enabled = true;
+  }
+  void disable(){
+    enabled = true;
+  }
 	
 	// --- getters ---------------------------------------------------------------
 	long target() const {
 		return currTarget;
 	}
+  bool isEnabled() const {
+    return enabled;
+  }
 
 public:
   void debug() {
@@ -89,4 +103,7 @@ private:
 	// callback
 	Callback callback;
 	int state;
+
+  // state
+  bool enabled;
 };
