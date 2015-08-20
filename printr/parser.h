@@ -16,7 +16,7 @@ bool isBlankSpace(char c){
 
 bool isDigit(char c){
     return c >= '0' && c <= '9';
-  }
+}
 
 class LineParser {
 public:

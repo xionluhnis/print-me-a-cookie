@@ -14,21 +14,29 @@ public:
 		reset();
 	}
 	
-	vec2 bestFreq(const vec2 &delta){
+	vec2 bestFreq(const vec2 &delta, unsigned long f_best){
 		vec2 abs = delta.abs();
 		long d_max = abs.max();
 		vec2 f;
 		for(int i = 0; i < 2; ++i){
 			if(abs[i] == d_max){
 				f[i] = sign(delta[i]) * f_best;
-			} else if(abs[i] == 0L) {
+			} else if(abs[i] <= stepper(i)->stepSize()) {
 				f[i] = 0L;
 			} else {
 				f[i] = (long)std::round(f_best * d_max / float(delta[i]));
+        // /!\ this can raise values lower than f_best
+        // => replace by (+/-)f_best in these cases
+        if(std::abs(f[i]) < f_best){
+          f[i] = sign(delta[i]) * f_best;
+        }
 			}
 		}
 		return f;
 	}
+ vec2 bestFreq(const vec2 &delta){
+   return bestFreq(delta, f_best);
+ }
 	
 	void update(){
     // should we work or not?
@@ -36,6 +44,7 @@ public:
     
 		// - should we be idle?
 		if(!hasTarget()){
+      if(debugMode > 1) Serial.println("No target.");
       // just go idle if not already
 		  if(isMoving()){
   			for(int i = 0; i < 2; ++i){
@@ -69,18 +78,30 @@ public:
 					 dy = stpY->valueAtFreq(Stepper::IDLE_FREQ);
 			// should we start slowing down?
 			vec2 targetFreq;
-			if(vec2(dx, dy).sqDistTo(realDelta()) <= epsilonSq){
+      vec2 delta = realDelta();
+			if(vec2(dx, dy).sqDistTo(delta) <= epsilonSq){
+        if(debugMode > 1){
+          Serial.print("Ending stop in "); Serial.print(dx); Serial.print(", "); Serial.print(dy);
+          Serial.print(" for target "); Serial.print(delta.x); Serial.print(", "); Serial.print(delta.y);
+          Serial.print(" | curFreq "); Serial.print(stpX->currentFreq()); Serial.print(", "); Serial.println(stpY->currentFreq());
+        }
 				// it will take us enough time to stop
 				// that we should start slowing down now!
-				targetFreq = vec2(Stepper::IDLE_FREQ);
+				targetFreq = bestFreq(delta, targetFreq.abs().max() + 1L); // vec2(Stepper::IDLE_FREQ);
 			} else {
-				targetFreq = bestFreq(realDelta());
+				targetFreq = bestFreq(delta);
+        if(debugMode > 1){
+          Serial.print("delta: "); Serial.print(delta.x); Serial.print(", "); Serial.print(delta.y);
+          Serial.print(" => trgFreq "); Serial.print(targetFreq.x); Serial.print(", "); Serial.print(targetFreq.y);
+          Serial.print(" | curFreq "); Serial.print(stpX->currentFreq()); Serial.print(", "); Serial.println(stpY->currentFreq());
+        }
 			}
 			adjustToFreq(targetFreq);
 		} else
 		
 		// - we must make our line as straight as possible
 		{
+      if(debugMode > 1) Serial.println("Straight line");
 			adjustToFreq(bestFreq(realDelta()));
 		}
 	}
@@ -147,8 +168,11 @@ public:
 		}
 		// done, we update the parameters of both stepper motors
 		for(int i = 0; i < 2; ++i){
+      if(debugMode > 2){
+        Serial.print("dt "); Serial.print(df[i], DEC); Serial.print(", f_trg "); Serial.println(f_trg[i]);
+      }
 			stepper(i)->setDeltaFreq(df[i]);
-			stepper(i)->moveToFreq(f_trg[i]);
+			stepper(i)->moveToFreq(f_trg[i]); // TODO these don't work correctly! => bug in updateFreq
 		}
 	}
 	
@@ -161,6 +185,12 @@ public:
 		ending = end;
 		// update target id
 		++targetID;
+   if(debugMode){
+      Serial.print("New targets: ");
+      Serial.print("from "); Serial.print(lastTarget.x, DEC); Serial.print(", "); Serial.print(lastTarget.y, DEC);
+      Serial.println(" ->"); Serial.print(currTarget.x, DEC); Serial.print(", "); Serial.println(currTarget.y, DEC);
+      Serial.print("Current: "); Serial.print(stpX->value()); Serial.print(", "); Serial.println(stpY->value());
+    }
 	}
   void resetX(long x){
     stpX->resetPosition(x);
@@ -190,7 +220,7 @@ public:
 	}
 	void reset() {
 		f_best = 1L;
-		df_max = 2L;
+		df_max = 1L;
 		epsilonSq = 400L;
 		lastTarget = currTarget = value();
     ending = true;
@@ -205,7 +235,7 @@ public:
     enabled = true;
   }
   void disable(){
-    enabled = true;
+    enabled = false;
   }
 	
 	// --- getters ---------------------------------------------------------------
@@ -274,6 +304,10 @@ public:
     Serial.print("currTg "); Serial.print(currTarget.x, DEC); Serial.print(", "); Serial.println(currTarget.y, DEC);
   }
 
+  void setDebugMode(int m){
+    debugMode = m;
+  }
+
 private:
 	Stepper *stpX, *stpY;
 	unsigned long f_best, df_max;
@@ -291,6 +325,7 @@ private:
 
   // state
   bool enabled;
+  int debugMode;
 };
 
 

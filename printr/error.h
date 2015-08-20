@@ -18,7 +18,8 @@ enum ErrorType {
   ERR_INVALID_G_CODE   = 11,
   ERR_FILE_PROC_STATE  = 12,
   ERR_BOUNDARY_TYPE    = 13,
-  ERR_MISSING_RANGE    = 14
+  ERR_MISSING_RANGE    = 14,
+  ERR_INVALID_DELTA_F  = 15
 };
 
 int error;
@@ -68,6 +69,9 @@ void logError() {
       break;
     case ERR_MISSING_RANGE:
       Serial.println("Cannot calibrate without stepper range values.");
+      break;
+    case ERR_INVALID_DELTA_F:
+      Serial.println("Cannot have a null delta frequency!");
       break;
     case -1:
       return;

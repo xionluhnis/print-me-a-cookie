@@ -95,6 +95,7 @@ void setup() {
 // buffer for time delaying checks
 long lastSwitchCheck[NUM_SWITCHES];
 int switchThreshold = 0;
+bool switchDebug = false;
 void react() {
   long thisTime = millis();
   for(int i = SWITCH_FIRST; i <= SWITCH_LAST; ++i){
@@ -129,7 +130,9 @@ void react() {
       if(switchCallback){
         switchCallback(i);
       }
-      Serial.print("Switch#"); Serial.print(i, DEC); Serial.print(" ~"); Serial.println(s, DEC);
+      if(switchDebug){
+        Serial.print("Switch#"); Serial.print(i, DEC); Serial.print(" ~"); Serial.println(s, DEC);
+      }
     }
   }
 }
@@ -426,18 +429,29 @@ void readCommands(Stream& input){
           case 'M':
           case 'm': {
             char c1 = command.readFullChar();
-            char c2 = command.readChar();
-            if(c1 == 'd' && c2 == 'f'){
-              locXY.setMaxDeltaFreq(command.readULong());
-            } else if(c1 == 'f' && c2 == 'b'){
-              locXY.setBestFreq(command.readULong());
-            } else {
-              char c3 = command.readChar();
-              if(c1 == 'e' && c2 == 'p' && c3 == 's'){
-                locXY.setPrecision(command.readULong());
-              } else{
+            if(c1 == 'd'){
+              char c2 = command.fullPeek();
+              if(isDigit(c2)){
+                locXY.setDebugMode(command.readInt());
+              } else if(c2 == 'f') {
+                c2 = command.readChar(); // consume it
+                locXY.setMaxDeltaFreq(command.readULong());
+              } else {
                 error = ERR_INVALID_SETTINGS;
                 return;
+              }
+            } else {
+              char c2 = command.readChar();
+              if(c1 == 'f' && c2 == 'b'){
+                locXY.setBestFreq(command.readULong());
+              } else {
+                char c3 = command.readChar();
+                if(c1 == 'e' && c2 == 'p' && c3 == 's'){
+                  locXY.setPrecision(command.readULong());
+                } else{
+                  error = ERR_INVALID_SETTINGS;
+                  return;
+                }
               }
             }
           } break;
@@ -446,28 +460,52 @@ void readCommands(Stream& input){
           case 'H':
           case 'h': {
             char c1 = command.readFullChar();
-            char c2 = command.readChar();
-            if(c1 == 'd' && c2 == 'f'){
-              locZ.setMaxDeltaFreq(command.readULong());
-            } else if(c1 == 'f' && c2 == 'b'){
-              locZ.setBestFreq(command.readULong());
+            if(c1 == 'd' || c1 == 'D'){
+              char c2 = command.fullPeek();
+              if(isDigit(c2)){
+                locZ.setDebugMode(command.readInt());
+              } else if(c2 == 'f'){
+                c2 = command.readChar(); // consume it
+                locZ.setMaxDeltaFreq(command.readULong());
+              } else {
+                error = ERR_INVALID_SETTINGS;
+                return;
+              }
             } else {
-              error = ERR_INVALID_SETTINGS;
-              return;
+              char c2 = command.readChar();
+              if(c1 == 'f' && c2 == 'b'){
+                locZ.setBestFreq(command.readULong());
+              } else {
+                error = ERR_INVALID_SETTINGS;
+                return;
+              }
             }
           } break;
 
           // - switch settings
           case 'S':
           case 's': {
-             char c1 = command.readFullChar();
-             if(c1 == 't' || c1 == 'T'){
-                switchThreshold = command.readInt();
-                Serial.print("New switch threshold: ");
-                Serial.println(switchThreshold, DEC);
-             } else {
-                error = ERR_INVALID_SETTINGS;
-             }
+            char c1 = command.readFullChar();
+            if(c1 == 't' || c1 == 'T'){
+              switchThreshold = command.readInt();
+              Serial.print("New switch threshold: ");
+              Serial.println(switchThreshold, DEC);
+            } else if(c1 == 'd' || c1 == 'D'){
+              switchDebug = !!command.readInt();
+            } else {
+              error = ERR_INVALID_SETTINGS;
+            }
+          } break;
+
+          // - gcode settings
+          case 'G':
+          case 'g': {
+            char c1 = command.readFullChar();
+            if(c1 == 'd' || c1 == 'D'){
+              gcode::debug = !!command.readInt();
+            } else {
+              error = ERR_INVALID_SETTINGS;
+            }
           } break;
           
           default:
@@ -513,6 +551,9 @@ void readCommands(Stream& input){
         // open and execute file
         int fileID = command.readInt();
         float scale = command.readFloat();
+        if(scale == 0.0){
+          scale = 1.0;
+        }
         if(fileID > 0){
           File &f = sdcard::open(fileID);
           Serial.print("Opening ");
@@ -688,7 +729,12 @@ int homeStatus;
 Callback homeCallback;
 void homeCheckEvent(int which){
   homeStatus |= which;
+  // Serial.print("Home reached "); Serial.println(which);
   if(homeStatus == B11){
+    Serial.println("Home!");
+    locXY.debug(); stpX.debug(); stpY.debug();
+    locZ.debug(); stpZ.debug();
+    stpZ.microstep(Stepper::MS_1_16);
     if(homeCallback){
       Callback cb = homeCallback;
       homeCallback = NULL;
@@ -697,6 +743,9 @@ void homeCheckEvent(int which){
   }
 }
 void boundaryEvent(int which){
+  if(switchDebug){
+    Serial.print("Hit boundary "); Serial.println(which, DEC);
+  }
   switch(which){
     case SWITCH_X_MAX:
       homeStatus |= 1 << 0;
@@ -708,20 +757,38 @@ void boundaryEvent(int which){
       homeStatus |= 1 << 2;
       break;
     default:
-      error = ERR_BOUNDARY_TYPE;
-      break;
+      //error = ERR_BOUNDARY_TYPE;
+      return;
   }
   // if all switches have been hit, we're done
-  if(homeStatus == 111){
+  if((homeStatus & B111) == B111){
     homeStatus = 0; // reset homing status
-    switchCallback = NULL;
+    switchCallback = NULL; // prevent more boundaryEvent calls
     // renable XYZ
     // TODO move to the correct location!
-    vec2 homeLoc((stpX.maxValue() - stpX.minValue()) / 2L, (stpY.maxValue() - stpY.minValue()) / 2L);
-    locXY.enable(); locXY.setState(1 << 0); locXY.setCallback(homeCheckEvent); locXY.setTarget(homeLoc);
-    locZ.enable();  locZ.setState(1 << 1);  locZ.setCallback(homeCheckEvent);  locZ.setTarget(stpZ.maxValue());
-    homeCheckEvent(1 << 1);
+    vec2 homeLoc(stpX.minValue() + stpX.range() / 2L, stpY.minValue() + stpY.range() / 2L);
+    locXY.enable(); locXY.setState(1 << 0);  locXY.setTarget(homeLoc);
+    locZ.enable();  locZ.setState(1 << 1);   locZ.setTarget(stpZ.maxValue());
+    stpZ.microstep(Stepper::MS_1_2); // to go at max frequency using H
+    // set callbacks
+    locXY.setCallback(homeCheckEvent);
+    locZ.setCallback(homeCheckEvent);
+    // homeCheckEvent(1 << 1);
   }
+  /* TODO this creates a strong noise, so we keep hitting the bumpers instead
+  else if(homeStatus == B11){
+    Serial.println("shifting");
+    homeStatus |= 1 << 3; // mask for this specific event
+    // change direction
+    stpX.moveToFreq(-3L);
+    stpY.moveToFreq(-3L);
+    // shift to avoid switch events
+    vec2 shift(stpX.maxValue() - 100L, stpY.maxValue() - 100L);
+    locXY.enable();
+    locXY.setTarget(shift);
+    locXY.setCallback(NULL);
+  }
+  */
 }
 void calibrateHome(Callback cb, int switchEvent){
   homeStatus = 0;
@@ -745,8 +812,9 @@ void calibrateHome(Callback cb, int switchEvent){
     locZ.disable();
     // go to switches in both X and Y
     stpX.moveToFreq(1L);
-    stpY.moveToFreq(1L);
-    stpZ.moveToFreq(-1L);
+    stpY.moveToFreq(2L);
+    stpZ.microstep(Stepper::MS_1_2);
+    stpZ.moveToFreq(-2L);
   }
 }
 

@@ -46,9 +46,11 @@ public:
 	void setTarget(long z){
 		lastTarget = currTarget;
 		currTarget = z;
-    //Serial.print("New targets: ");
-    //Serial.print(lastTarget); Serial.print(" -> "); Serial.println(currTarget);
-    //Serial.print("Current: "); Serial.println(stpZ->value());
+    if(debugMode){
+      Serial.print("New targets: ");
+      Serial.print(lastTarget); Serial.print(" -> "); Serial.println(currTarget);
+      Serial.print("Current: "); Serial.println(stpZ->value());
+    }
 	}
 	void setBestFreq(unsigned long f){
 		if(f)
@@ -74,6 +76,7 @@ public:
 	}
   void resetZ(long z){
     stpZ->resetPosition(z);
+    lastTarget = currTarget = z;
   }
   void toggle(){
     enabled = !enabled;
@@ -82,7 +85,7 @@ public:
     enabled = true;
   }
   void disable(){
-    enabled = true;
+    enabled = false;
   }
 	
 	// --- getters ---------------------------------------------------------------
@@ -106,7 +109,7 @@ public:
   bool hasReachedTarget() const {
     long currDelta = stpZ->value() - currTarget;
     long fullDelta = lastTarget - currTarget;
-    return currDelta * fullDelta < 0L || std::abs(currDelta) < stpZ->stepSize();
+    return currDelta * fullDelta < 0L || std::abs(currDelta) <= stpZ->stepSize();
   }
 
 public:
@@ -116,6 +119,10 @@ public:
     Serial.print("df_max "); Serial.println(df_max, DEC);
     Serial.print("lastTg "); Serial.println(lastTarget, DEC);
     Serial.print("currTg "); Serial.println(currTarget, DEC);
+  }
+
+  void setDebugMode(int m){
+    debugMode = m;
   }
 
 private:
@@ -132,6 +139,7 @@ private:
 
   // state
   bool enabled;
+  int debugMode;
 };
 
 

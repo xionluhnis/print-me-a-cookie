@@ -35,6 +35,7 @@ namespace gcode {
     float value;
 
     Field() : code('\0'), value(0.0) {}
+    Field(const Field& o) : code(o.code), value(o.value) {}
 
     template <typename T>
     Field(char c, T v) : code(c), value(v) {}
@@ -46,12 +47,14 @@ namespace gcode {
       return code == 0 || !isValidField(code);
     }
   };
+
+  bool debug = false;
   
   class CommandReader {
   public:
 
     CommandReader() : input(NULL), locXY(NULL), locZ(NULL), stpE(NULL) {}
-    CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1000.0) : input(&s), line(s), locXY(xy), locZ(z), stpE(e), scale(f), metric(true) {
+    CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1.0) : input(&s), line(s), locXY(xy), locZ(z), stpE(e), scale(f), metric(true) {
       X = Y = Z = A = E = F = P = S = 0;  
     }
     
@@ -60,18 +63,20 @@ namespace gcode {
       return input && input->available();
     }
     void next(){
+      if(debug) Serial.println("{");
       bool idle = true;
       while(input->available() && idle){
         // start new line parser
         line = LineParser(*input);
 
-        Serial.print(". ");
+        if(debug) Serial.print(". ");
   
         // currently parsed command
         Field command;
         while(line.available()){
           Field field = readField();
           if(!field) break;
+          if(debug) Serial.print(field.code);
           switch(field.code){
             
             // implicit movement command
@@ -109,6 +114,7 @@ namespace gcode {
           if(res) idle = false;
         }
       }
+      if(debug) Serial.println("}");
     }
 
     long convertToUnit(float value) const {
@@ -119,7 +125,9 @@ namespace gcode {
 
   protected:
     bool execCommand(const Field &command){
-      Serial.print('exec '); Serial.print(command.code); Serial.println(int(command.value), DEC);
+      if(debug) {
+        Serial.print(" >"); Serial.print(command.code); Serial.println(int(command.value), DEC);
+      }
       int id = int(command.value);
       bool res = false;
       switch(command.code){
@@ -181,6 +189,8 @@ namespace gcode {
               locZ->setTarget(Z);
             } else if(!absolute && Z){
               locZ->setTarget(curZ + Z);
+            } else {
+              hasZ = false; // invalidate
             }
           }
           if(hasX || hasY){
@@ -189,6 +199,8 @@ namespace gcode {
               locXY->setTarget(vec2(X, Y));
             } else if(!absolute && ((hasX && X) || (hasY && Y))){
               locXY->setTarget(xy + vec2(hasX ? X : 0, hasY ? Y : 0));
+            } else {
+              hasX = hasY = false; // invalidate
             }
           }
         } return hasX || hasY || hasZ;

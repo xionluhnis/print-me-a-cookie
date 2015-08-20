@@ -197,6 +197,9 @@ public:
   }
   void setDeltaFreq(unsigned long deltaF = 1L){
   	df = deltaF;
+    if(df == 0L){
+      error = ERR_INVALID_DELTA_F;
+    }
   }
   void setSafeFreq(unsigned long f0 = 100L){
   	f_safe = f0;
