@@ -405,23 +405,34 @@ void readCommands(Stream& input){
             Stepper *stp = selectStepper(c);
             if(!stp) return;
             char c1 = command.readFullChar();
-            char c2 = command.readChar();
-            if(c1 == 'd' && c2 == 'f'){
-              stp->setDeltaFreq(command.readULong());
-            } else if(c1 == 'f' && c2 == 's'){
-              stp->setSafeFreq(command.readULong());
-            } else if(c1 == 'r' && c2 == 'g'){
-              unsigned long range = command.readULong();
-              if(range){
-                stp->setRange(range);
+            if(c1 == 'd' || c1 == 'D'){
+              char c2 = command.fullPeek();
+              if(isDigit(c2)){
+                stp->setDebugMode(command.readInt());
+              }else if(c2 == 'f'){
+                command.readChar(); // consume it
+                stp->setDeltaFreq(command.readULong());
+              } else {
+                error = ERR_INVALID_SETTINGS;
+                return;
               }
-              Serial.print("Range of "); 
-              Serial.print(c);
-              Serial.print(": ");
-              Serial.println(stp->range(), DEC);
             } else {
-              error = ERR_INVALID_SETTINGS;
-              return;
+              char c2 = command.readChar();
+              if(c1 == 'f' && c2 == 's'){
+                stp->setSafeFreq(command.readULong());
+              } else if(c1 == 'r' && c2 == 'g'){
+                unsigned long range = command.readULong();
+                if(range){
+                  stp->setRange(range);
+                }
+                Serial.print("Range of "); 
+                Serial.print(c);
+                Serial.print(": ");
+                Serial.println(stp->range(), DEC);
+              } else {
+                error = ERR_INVALID_SETTINGS;
+                return;
+              }
             }
           } break;
           

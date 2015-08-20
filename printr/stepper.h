@@ -289,6 +289,7 @@ protected:
     && f_tmp != IDLE_FREQ){
       // revert change
       f_cur = f_tmp;
+      if(debugMode > 0) Serial.println("Freq change abortion because of memory.");
     } else {
       // remember change
       f_mem = f_tmp;
@@ -323,8 +324,10 @@ protected:
   }
   
   long updateFreq(long f_c, long f_t, long df) const{
-    if(ident == 'e'){
-      // arduino::printf("updateFreq: f_c=%d, f_t=%d, df=%d\n", f_c, f_t, df);
+    if(debugMode > 1){
+      Serial.print("updateFreq: f_c="); Serial.print(f_c, DEC);
+      Serial.print(", f_t="); Serial.print(f_t, DEC);
+      Serial.print(", df="); Serial.println(df, DEC);
     }
   	// update frequency only if needed
 		if(f_c == f_t)
@@ -333,11 +336,6 @@ protected:
 		// safety targets
 		bool safe_cur = isSafeFreq(f_c);
 		bool safe_trg = isSafeFreq(f_t);
-
-    if(ident == 'e'){
-      // Serial.print("safe_cur="); Serial.println(safe_cur, DEC);
-      // Serial.print("safe_trg="); Serial.println(safe_trg, DEC);
-    }
 		
 		// are both safe frequencies?
 		if(safe_cur && safe_trg){
@@ -365,8 +363,8 @@ protected:
 			f_c += sign(f_c) * df;
 		}
 
-    if(ident == 'e'){
-      // Serial.print("f_c <- "); Serial.println(f_c, DEC);
+    if(debugMode > 1){
+      Serial.print("f_c <- "); Serial.println(f_c, DEC);
     }
 		return f_c;
   }
@@ -389,6 +387,10 @@ public:
       Serial.print(minSteps, DEC); Serial.print(", "); Serial.print(maxSteps, DEC); Serial.println("]");
     //arduino::printf("position: stepMode=%d, steps=%d, stepDelta=%d, stepDir=%d\n",
     //                stepMode, steps, stepDelta, stepDir);
+  }
+
+  void setDebugMode(int m){
+    debugMode = m;
   }
 
 private:
@@ -422,6 +424,7 @@ private:
 
   // state
   bool enabled;
+  int debugMode;
 };
 
 

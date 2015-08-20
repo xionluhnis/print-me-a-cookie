@@ -88,6 +88,7 @@ public:
 				// it will take us enough time to stop
 				// that we should start slowing down now!
 				targetFreq = bestFreq(delta, targetFreq.abs().max() + 1L); // vec2(Stepper::IDLE_FREQ);
+        // TODO this change is a HACK, it's not intended (most likely valueAtFreq is wrong instead)
 			} else {
 				targetFreq = bestFreq(delta);
         if(debugMode > 1){
