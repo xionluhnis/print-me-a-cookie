@@ -182,10 +182,17 @@ public:
 		// shift targets
 		lastTarget = currTarget;
 		currTarget = trg;
+   
 		// ending state
 		ending = end;
+   
+    // reset memory so that we can move optimally
+    stpX->resetMemory();
+    stpY->resetMemory();
+    
 		// update target id
 		++targetID;
+   
    if(debugMode){
       Serial.print("New targets: ");
       Serial.print("from "); Serial.print(lastTarget.x, DEC); Serial.print(", "); Serial.print(lastTarget.y, DEC);

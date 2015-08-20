@@ -170,6 +170,9 @@ public:
         minSteps += delta;
     }
   }
+  void resetMemory(){
+    f_mem = IDLE_FREQ;
+  }
   void setMaxValue(long maxValue, bool rangeUpdate = true){
     maxSteps = maxValue;
     // reset current steps to be within bounds (so we don't get stuck out of bounds)
@@ -284,17 +287,17 @@ protected:
     count = 0L; // reset
     long f_tmp = f_cur;
     f_cur = updateFreq(f_cur, f_trg);
-    // prevent oscillation (special case for IDLE)
-    if(f_cur != f_tmp && f_cur == f_mem
-    && f_tmp != IDLE_FREQ){
+    // prevent oscillation (special case for IDLE and opposite side)
+    if(f_mem && f_cur != f_tmp && std::abs(f_cur - f_tmp) == 1L && f_cur == f_mem
+    && f_tmp != IDLE_FREQ && f_tmp * f_trg > 0){
       // revert change
       f_cur = f_tmp;
-      if(debugMode > 0) Serial.println("Freq change abortion because of memory.");
+      if(debugMode > 1) Serial.println("Freq change abortion because of memory.");
     } else {
       // remember change
       f_mem = f_tmp;
     }
-    if(f_cur != f_tmp){
+    if(f_cur != f_tmp && debugMode > 0){
       Serial.print("freqUpdate(");
       Serial.print(ident);
       Serial.print("): ");
@@ -324,7 +327,7 @@ protected:
   }
   
   long updateFreq(long f_c, long f_t, long df) const{
-    if(debugMode > 1){
+    if(debugMode > 2){
       Serial.print("updateFreq: f_c="); Serial.print(f_c, DEC);
       Serial.print(", f_t="); Serial.print(f_t, DEC);
       Serial.print(", df="); Serial.println(df, DEC);
@@ -346,7 +349,13 @@ protected:
 		if(f_c * f_t > 0){
 			// get closer
 			long s0 = sign(f_t - f_c);
-			f_c += s0 * df;
+      if(safe_cur){
+        long f_c1 = f_c + s0 * df; // moving normally using acceleration
+        long f_c2 = f_safe * sign(f_t);
+        f_c = std::abs(f_c2 - f_t) < std::abs(f_c1 - f_t) ? f_c2 : f_c1;
+      } else {
+			  f_c += s0 * df;
+      }
 			if(sign(f_t - f_c) != s0){
 				// we reach the target (or went past)
 				f_c = f_t;
@@ -363,7 +372,7 @@ protected:
 			f_c += sign(f_c) * df;
 		}
 
-    if(debugMode > 1){
+    if(debugMode > 2){
       Serial.print("f_c <- "); Serial.println(f_c, DEC);
     }
 		return f_c;
