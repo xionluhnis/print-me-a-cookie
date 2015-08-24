@@ -48,6 +48,19 @@ namespace gcode {
     }
   };
 
+  /**
+   * Path description generated
+   * by simulating gcode
+   */
+  struct Description {
+    vec2 min, max;
+    vec2 start, end;
+    vec2 range() const {
+      return max - min;
+    }
+    Description(): min(0L, 0L), max(0L, 0L), start(0L, 0L), end(0L, 0L) {}
+  };
+
   bool debug = false;
   
   class CommandReader {
@@ -58,11 +71,32 @@ namespace gcode {
       X = Y = Z = A = E = F = P = S = 0;  
     }
     
-
     bool available(){
       return input && input->available();
     }
-    void next(){
+    
+    /**
+     * Simulate the full gcode to provide a description of it
+     */
+    const Description &simulate() {
+      // init description
+      desc = Description();
+      lastX = lastY = 0L;
+      // run all commands
+      while(available()){
+        next(true);
+      }
+      // provide resulting description
+      return desc;
+    }
+    
+    /**
+     * Execute the next gcode segments until we have to wait
+     * for a movement to be completed.
+     * 
+     * @param bool simul whether to run the commands or just simulate them
+     */
+    void next(bool simul = false){
       if(debug) Serial.println("{");
       bool idle = true;
       while(input->available() && idle){
@@ -92,7 +126,7 @@ namespace gcode {
             // modal command
             case 'M': {
               if(command){
-                bool res = execCommand(command);
+                bool res = execCommand(command, simul);
                 if(res) idle = false;
               }
               command = field;
@@ -110,7 +144,7 @@ namespace gcode {
         }
         // execute pending
         if(command){
-          bool res = execCommand(command);
+          bool res = execCommand(command, simul);
           if(res) idle = false;
         }
       }
@@ -124,7 +158,7 @@ namespace gcode {
     }
 
   protected:
-    bool execCommand(const Field &command){
+    bool execCommand(const Field &command, bool simulation = false){
       if(debug) {
         Serial.print(" >"); Serial.print(command.code); Serial.println(int(command.value), DEC);
       }
@@ -132,7 +166,11 @@ namespace gcode {
       bool res = false;
       switch(command.code){
         case 'G':
-          res = execMoveCommand(id);
+          if(simulation){
+            simulateMoveCommand(id); // no interruption since we don't have to wait for the real movement
+          } else {
+            res = execMoveCommand(id);
+          }
           G = id; // store this command
           break;
         case 'M':
@@ -267,6 +305,62 @@ namespace gcode {
       }
       return false;
     }
+    void simulateMoveCommand(int id){
+      switch(id){
+        // --- linear movement
+        case 0:
+        case 1: {
+          if(hasX || hasY){
+            vec2 delta;
+            if(absolute && ((hasX && lastX != X) || (hasY && lastY != Y))){
+              delta.x = X - lastX;
+              delta.y = Y - lastY;
+            } else if(!absolute){
+              if(hasX) delta.x = X;
+              if(hasY) delta.y = Y;
+            }
+            // simulate the shift (new end point)
+            lastX += delta.x;
+            lastY += delta.y;
+            desc.end.x += delta.x;
+            desc.end.y += delta.y;
+            // set boundaries to include this last point
+            desc.min.x = std::min(desc.min.x, desc.end.x);
+            desc.min.y = std::min(desc.min.y, desc.end.y);
+            desc.max.x = std::max(desc.max.x, desc.end.x);
+            desc.max.y = std::max(desc.max.y, desc.end.y);
+          }
+        } break;
+
+        // --- rotation (NOT SUPPORTED)
+        case 2:
+        case 3: {
+          
+        } break;
+
+        // --- metric system
+        case 20: metric = false; break; // set to inches
+        case 21: metric = true; break; // set to millimeters
+
+        // --- absolute / relative positioning
+        case 90: absolute = true; break;
+        case 91: absolute = false; break;
+        
+        // --- origin reset
+        case 92: {
+          if(!hasX && !hasY && !hasZ && !hasE){
+            lastX = lastY = 0L;
+          } else {
+            if(hasX){
+              lastX = X;
+            }
+            if(hasY){
+              lastY = Y;
+            }
+          }
+        } break;
+      }
+    }
     bool execModalCommand(int id){
       return false;
     }
@@ -310,7 +404,10 @@ namespace gcode {
 
     // parameters
     float scale;
-    
+
+    // description
+    Description desc;
+    long lastX, lastY;
   };
 
   

@@ -556,7 +556,29 @@ void readCommands(Stream& input){
       } break;
 
       case 'G':
-      case 'g':
+      case 'g': {
+        char c = command.fullPeek();
+        if(c == 'G' || c == 'g'){
+          command.readChar();
+          int fileID = command.readInt();
+          float scale = command.readFloat();
+          if(scale == 0.0){
+            scale = 1.0;
+          }
+          if(fileID > 0){
+            File &f = sdcard::open(fileID);
+            gcode::CommandReader gcode(f, &locXY, &locZ, &stpE0, scale);
+            gcode::Description desc = gcode.simulate();
+            Serial.print("--- Simulation (scale="); Serial.print(scale, DEC); Serial.println(") ---");
+            Serial.print("BBox: "); Serial.print(desc.min.x, DEC); Serial.print(", "); Serial.print(desc.min.y, DEC);
+            Serial.print(" to "); Serial.print(desc.max.x, DEC); Serial.print(", "); Serial.println(desc.max.y, DEC);
+            Serial.print("Path from "); Serial.print(desc.start.x, DEC); Serial.print(", "); Serial.print(desc.start.y, DEC);
+            Serial.print(" to "); Serial.print(desc.end.x, DEC); Serial.print(", "); Serial.println(desc.end.y, DEC);
+            Serial.println("------");
+          }
+          break;
+        }
+      }
       case 'O':
       case 'o': {
         // open and execute file
