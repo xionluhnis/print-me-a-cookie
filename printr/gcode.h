@@ -69,6 +69,7 @@ namespace gcode {
     CommandReader() : input(NULL), locXY(NULL), locZ(NULL), stpE(NULL) {}
     CommandReader(Stream &s, Locator *xy, Elevator *z, Stepper *e, float f = 1.0) : input(&s), line(s), locXY(xy), locZ(z), stpE(e), scale(f), metric(true) {
       X = Y = Z = A = E = F = P = S = 0;  
+      absolute = true;
     }
     
     bool available(){
@@ -102,6 +103,11 @@ namespace gcode {
       while(input->available() && idle){
         // start new line parser
         line = LineParser(*input);
+
+        char firstChar = line.fullPeek();
+        if(firstChar == ';'){
+          line.skip(true);
+        }
 
         if(debug) Serial.print(". ");
   

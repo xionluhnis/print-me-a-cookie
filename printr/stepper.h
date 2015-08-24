@@ -76,8 +76,8 @@ public:
     df = 1L;
     f_safe = 5L;
     count = f_cur = f_trg = f_mem = 0L;
-    maxSteps = MAX_LONG;
-    minSteps = MIN_LONG;
+    // maxSteps = MAX_LONG;
+    // minSteps = MIN_LONG;
     stepDir = 1L;
     digitalWrite(stp, LOW);
     digitalWrite(dir, posDirSignal);
@@ -288,7 +288,7 @@ protected:
     long f_tmp = f_cur;
     f_cur = updateFreq(f_cur, f_trg);
     // prevent oscillation (special case for IDLE and opposite side)
-    if(f_mem && f_cur != f_tmp && std::abs(f_cur - f_tmp) == 1L && f_cur == f_mem
+    if(false && f_mem && f_cur != f_tmp && std::abs(f_cur - f_tmp) == 1L && f_cur == f_mem
     && f_tmp != IDLE_FREQ && f_tmp * f_trg > 0){
       // revert change
       f_cur = f_tmp;

@@ -200,6 +200,7 @@ void resetToHome(int switchEvent) {
 ////////////////////////////////////////////////////////////////
 void readCommands(Stream& input){
   while(input.available() && error <= ERR_NONE){
+
     // full line parser
     LineParser line(input);
     // create a command parser (subline)
@@ -577,6 +578,10 @@ void readCommands(Stream& input){
             Serial.println("------");
           }
           break;
+        } else if(c == 'r' || c == 'R'){
+          command.readChar();
+          gcode::CommandReader gcode(input, &locXY, &locZ, &stpE0, 1.0);
+          gcode.next();
         }
       }
       case 'O':
@@ -745,7 +750,7 @@ void processFile(File &file, bool gcode, float scale){
   // => set callbacks and states
   errorCallback = processFileError;
   locXY.setCallback(processNextLine); locXY.setState(gcode ? 1 : 0);
-  locZ.setCallback(processNextLine); locZ.setState(gcode ? 1 : 0);
+  // locZ.setCallback(processNextLine); locZ.setState(gcode ? 1 : 0);
   // initialize potential gcode reader
   if(gcode){
     gcodeReader = gcode::CommandReader(file, &locXY, &locZ, &stpE0, scale);
