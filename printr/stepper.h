@@ -37,6 +37,19 @@ public:
   			return 0L;
   	}
   }
+
+  static byte modeForSteps(long steps){
+    switch(steps){
+      case 1L: return MS_1_16;
+      case 2L: return MS_1_8;
+      case 4L: return MS_1_4;
+      case 8L: return MS_1_2;
+      case 16L: return MS_1_1;
+      default:
+        error = ERR_INVALID_MS_STEPS;
+        return 0;
+    }
+  }
   
   // exceptional idle frequency case
   static const long IDLE_FREQ = 0L;
@@ -122,7 +135,7 @@ public:
     if(!enabled){
       digitalWrite(en, LOW);
       enabled = true;
-      Serial.println("enable");
+      if(debugMode > 1) Serial.println("enable");
     }
   }
 
@@ -130,15 +143,18 @@ public:
     if(enabled && !isRunning()){
       digitalWrite(en, HIGH);
       enabled = false;
-      Serial.println("disable");
+      if(debugMode > 1) Serial.println("disable");
     }
   }
 
   void microstep(byte mode = MS_SLOW, bool forceDisable = false) {
-    // Serial.println("Microstep");
     enable();
     stepMode = mode;
     stepDelta = stepsForMode(mode);
+    if(debugMode > 0){
+      Serial.print("Microstep/"); Serial.print(ident);
+      Serial.print(": "); Serial.println(stepDelta, DEC);
+    }
     int  ms[] = { ms1, ms2, ms3 };
     byte mask[] = { B100, B010, B001 };
     for(int i = 0; i < 3; ++i){
@@ -248,24 +264,32 @@ public:
   	else
   		return 0L;
   }
-  long valueAtFreq(long f_t, long df) const {
+  long stepsToFreq(long f_t, long df, unsigned long stpDelta) const {
   	long d = steps;
   	long f = f_cur;
   	while(f != f_t){
-  		d += sign(f) * stepDelta;
-  		f = updateFreq(f, f_t, df);
+      if(stpDelta > 1L){
+        d += sign(f) * stpDelta;
+        stpDelta = 1L; // set to low microstep
+      } else {
+    		d += sign(f);
+    		f = updateFreq(f, f_t, df);
+      }
   	}
   	return d;
   }
-  long valueAtFreq(long f_t) const {
-  	return valueAtFreq(f_t, df);
+  long stepsToFreq(long f_t, long df) const {
+    return stepsToFreq(f_t, df, stepDelta);
+  }
+  long stepsToFreq(long f_t) const {
+  	return stepsToFreq(f_t, df);
   }
   
   // --- checks ----------------------------------------------------------------
   bool isRunning() const {
     return f_trg != IDLE_FREQ || f_cur != IDLE_FREQ;
   }
-  bool isEnabled() const {
+  const bool &isEnabled() const {
     return enabled;
   }
   bool isSafeFreq(long f) const {
@@ -279,6 +303,9 @@ public:
   }
   bool hasRange() const {
     return stepRange != 0L;
+  }
+  bool lowMicrostep() const {
+    return stepMode == MS_1_16;
   }
 
 protected:

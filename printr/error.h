@@ -11,15 +11,16 @@ enum ErrorType {
   ERR_FILE_UNAVAILABLE = 4,
   ERR_CMD_UNSUPPORTED  = 5,
   ERR_INVALID_MS_MODE  = 6,
-  ERR_INVALID_STEPPER  = 7,
-  ERR_INVALID_ACCESSOR = 8,
-  ERR_INVALID_ROUNDING = 9,
-  ERR_INVALID_SETTINGS = 10,
-  ERR_INVALID_G_CODE   = 11,
-  ERR_FILE_PROC_STATE  = 12,
-  ERR_BOUNDARY_TYPE    = 13,
-  ERR_MISSING_RANGE    = 14,
-  ERR_INVALID_DELTA_F  = 15
+  ERR_INVALID_MS_STEPS = 7,
+  ERR_INVALID_STEPPER  = 8,
+  ERR_INVALID_ACCESSOR = 9,
+  ERR_INVALID_ROUNDING = 10,
+  ERR_INVALID_SETTINGS = 11,
+  ERR_INVALID_G_CODE   = 12,
+  ERR_FILE_PROC_STATE  = 13,
+  ERR_BOUNDARY_TYPE    = 14,
+  ERR_MISSING_RANGE    = 15,
+  ERR_INVALID_DELTA_F  = 16
 };
 
 int error;
@@ -45,6 +46,9 @@ void logError() {
       break;
     case ERR_INVALID_MS_MODE:
       Serial.println("Wrong multistepping mode!");
+      break;
+    case ERR_INVALID_MS_STEPS:
+      Serial.println("Wrong multistepping number!");
       break;
     case ERR_INVALID_STEPPER:
       Serial.println("Wrong stepper selection!");

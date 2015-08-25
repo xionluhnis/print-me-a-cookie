@@ -18,12 +18,18 @@ public:
 		// were we moving?
 		if(!hasTarget()){
       // Serial.println("No Z target");
+      if(!stpZ->lowMicrostep()){
+        stpZ->microstep(Stepper::MS_SLOW);
+      }
 			stpZ->moveToFreq(Stepper::IDLE_FREQ);
 			return;
 		}
 		// are we done moving?
 		if(hasReachedTarget()){
       // Serial.println("Reached H target");
+      if(!stpZ->lowMicrostep()){
+        stpZ->microstep(Stepper::MS_SLOW);
+      }
 			stpZ->moveToFreq(Stepper::IDLE_FREQ);
 			if(callback){
 				callback(state);
@@ -31,9 +37,22 @@ public:
 			lastTarget = currTarget;
 		} else {
 			// move at the best frequency (directly)
-			stpZ->moveToFreq(bestFreq(realDelta()));
+      long dz = realDelta();
+			stpZ->moveToFreq(bestFreq(dz));
 			stpZ->setSafeFreq(f_best);
 			stpZ->setDeltaFreq(df_max);
+     
+      // acceleration with ms
+      if(std::abs(stpZ->currentFreq()) == 1L){
+        dz = std::abs(dz);
+        if(dz > 4000L){
+          stpZ->microstep(Stepper::MS_1_2);
+        } else if(dz >= 1000L){
+          stpZ->microstep(Stepper::MS_1_4);
+        } else if(!stpZ->lowMicrostep()){
+          stpZ->microstep(Stepper::MS_SLOW);
+        }
+      }
       // Serial.print("Freq: "); Serial.println(stpZ->targetFreq());
 		}
 	}

@@ -582,6 +582,7 @@ void readCommands(Stream& input){
           command.readChar();
           gcode::CommandReader gcode(input, &locXY, &locZ, &stpE0, 1.0);
           gcode.next();
+          break;
         }
       }
       case 'O':

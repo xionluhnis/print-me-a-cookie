@@ -84,5 +84,27 @@ namespace arduino {
   }
 }
 
+template <typename T>
+class Array {
+public:
+
+  Array(T *p = NULL, unsigned int n = 0) : ptr(p), N(n){  
+  }
+
+  unsigned int length() const {
+    return N;
+  }
+
+  const T &operator[](unsigned int i) const {
+    return ptr[i];
+  }
+  T &operator[](unsigned int i) {
+    return ptr[i];
+  }
+
+private:
+  T *ptr;
+  unsigned int N;
+};
 
 

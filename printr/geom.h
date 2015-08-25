@@ -84,6 +84,12 @@ struct vec2_ {
 	vec abs() const {
 		return vec(std::abs(x), std::abs(y));
 	}
+  vec sign() const {
+    return vec(
+      x < 0L ? -1L : 1L,
+      y < 0L ? -1L : 1L
+    );
+  }
 	S dot(const vec &v) const {
 		return x * v.x + y * v.y;
 	}

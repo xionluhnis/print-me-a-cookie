@@ -34,9 +34,9 @@ public:
 		}
 		return f;
 	}
- vec2 bestFreq(const vec2 &delta){
+  vec2 bestFreq(const vec2 &delta){
    return bestFreq(delta, f_best);
- }
+  }
 	
 	void update(){
     // should we work or not?
@@ -49,6 +49,9 @@ public:
 		  if(isMoving()){
   			for(int i = 0; i < 2; ++i){
   				Stepper *stp = stepper(i);
+          if(!stp->lowMicrostep()){
+            stp->microstep(Stepper::MS_SLOW);
+          }
   				if(stp->targetFreq() != Stepper::IDLE_FREQ)
   					stp->moveToFreq(Stepper::IDLE_FREQ);
   			}
@@ -72,22 +75,23 @@ public:
 			}
 		}
 		
+    vec2 delta = realDelta();
 		// - should we stop at the target?
 		if(isEnding()){
-			long dx = stpX->valueAtFreq(Stepper::IDLE_FREQ),
-					 dy = stpY->valueAtFreq(Stepper::IDLE_FREQ);
+			long x0 = stpX->stepsToFreq(Stepper::IDLE_FREQ),
+					 y0 = stpY->stepsToFreq(Stepper::IDLE_FREQ);
 			// should we start slowing down?
 			vec2 targetFreq;
-      vec2 delta = realDelta();
-			if(vec2(dx, dy).sqDistTo(delta) <= epsilonSq){
+			if((currTarget - vec2(x0, y0)).sqLength() < epsilonSq){
         if(debugMode > 1){
-          Serial.print("Ending stop in "); Serial.print(dx); Serial.print(", "); Serial.print(dy);
-          Serial.print(" for target "); Serial.print(delta.x); Serial.print(", "); Serial.print(delta.y);
+          Serial.print("Ending stop in "); Serial.print(x0); Serial.print(", "); Serial.print(y0);
+          Serial.print(" for target "); Serial.print(currTarget.x); Serial.print(", "); Serial.print(currTarget.y);
           Serial.print(" | curFreq "); Serial.print(stpX->currentFreq()); Serial.print(", "); Serial.println(stpY->currentFreq());
         }
+        // targetFreq = bestFreq(delta);
 				// it will take us enough time to stop
 				// that we should start slowing down now!
-				targetFreq = bestFreq(delta, targetFreq.abs().max() + 1L); // vec2(Stepper::IDLE_FREQ);
+				targetFreq = bestFreq(delta, currentFreq().abs().max() + 1L); // vec2(Stepper::IDLE_FREQ);
         // TODO this change is a HACK, it's not intended (most likely valueAtFreq is wrong instead)
 			} else {
 				targetFreq = bestFreq(delta);
@@ -97,13 +101,13 @@ public:
           Serial.print(" | curFreq "); Serial.print(stpX->currentFreq()); Serial.print(", "); Serial.println(stpY->currentFreq());
         }
 			}
-			adjustToFreq(targetFreq);
+			adjustToFreq(targetFreq, delta);
 		} else
 		
 		// - we must make our line as straight as possible
 		{
       if(debugMode > 1) Serial.println("Straight line");
-			adjustToFreq(bestFreq(realDelta()));
+			adjustToFreq(bestFreq(delta), delta);
 		}
 	}
 	
@@ -111,7 +115,7 @@ public:
 		return std::max(t1, t2) - std::min(t1, t2); // won't underflow
 	}
 	
-	void adjustToFreq(vec2 f_trg){
+	void adjustToFreq(vec2 f_trg, const vec2 &delta){
 		unsigned long df[2] = { df_max, df_max };
 		unsigned long t[2] = { stpX->timeToFreq(f_trg[0], df[0]), stpY->timeToFreq(f_trg[1], df[1]) };
 		unsigned long dt = deltaTime(t[0], t[1]);
@@ -167,6 +171,46 @@ public:
 			}
      */
 		}
+
+    /*
+    // acceleration using ms
+    long f_x = std::abs(stpX->currentFreq());
+    long f_y = std::abs(stpY->currentFreq());
+    vec2 d = delta.abs();
+    bool msX = f_x == 1L && std::abs(stpX->targetFreq()) == 1L;
+    bool msY = f_y == 1L && std::abs(stpY->targetFreq()) == 1L;
+    if(d.sqLength() > 5000L * 5000L){
+      if(d.x == 0L || d.y > 5L * d.x){
+        stpY->microstep(Stepper::MS_1_4);
+        f_trg[0] /= 4;
+      } else if(d.y == 0L || d.x > 5L * d.y){
+        stpX->microstep(Stepper::MS_1_4);
+        f_trg[1] /= 4;
+      } else {
+        msX = msY = false;
+      }
+    } else if(d.sqLength() > 1000L * 1000L){
+      if(d.x == 0L || d.y > 5L * d.x){
+        stpY->microstep(Stepper::MS_1_8);
+        f_trg[0] /= 2;
+      } else if(d.y == 0L || d.x > 5L * d.y){
+        stpX->microstep(Stepper::MS_1_8);
+        f_trg[1] /= 2;
+      } else {
+        msX = msY = false;
+      }
+    } else {
+      msX = msY = false;
+    }
+    
+    if(!msX && !stpX->lowMicrostep()){
+      stpX->microstep(Stepper::MS_SLOW);
+    }
+    if(!msY && !stpY->lowMicrostep()){
+      stpY->microstep(Stepper::MS_SLOW);
+    }
+    */
+    
 		// done, we update the parameters of both stepper motors
 		for(int i = 0; i < 2; ++i){
       if(debugMode > 2){
@@ -183,7 +227,7 @@ public:
 		lastTarget = currTarget;
 		currTarget = trg;
    
-		// ending state
+		// movement state
 		ending = end;
    
     // reset memory so that we can move optimally
@@ -217,8 +261,8 @@ public:
 			df_max = df;
 	}
 	void setPrecision(unsigned long eps){
-		if(eps)
-			epsilonSq = eps * eps;
+		epsilon = eps;
+    epsilonSq = std::max(1UL, eps * eps);
 	}
 	void setCallback(Callback cb){
 		callback = cb;
@@ -229,7 +273,7 @@ public:
 	void reset() {
 		f_best = 1L;
 		df_max = 1L;
-		epsilonSq = 400L;
+		setPrecision(5UL);
 		lastTarget = currTarget = value();
     ending = true;
 		callback = NULL;
@@ -307,7 +351,7 @@ public:
     Serial.println("debug(m):");
     Serial.print("f_best "); Serial.println(f_best, DEC);
     Serial.print("df_max "); Serial.println(df_max, DEC);
-    Serial.print("epsSq  "); Serial.println(epsilonSq, DEC);
+    Serial.print("eps    "); Serial.println(epsilon, DEC);
     Serial.print("lastTg "); Serial.print(lastTarget.x, DEC); Serial.print(", "); Serial.println(lastTarget.y, DEC);
     Serial.print("currTg "); Serial.print(currTarget.x, DEC); Serial.print(", "); Serial.println(currTarget.y, DEC);
   }
@@ -319,7 +363,7 @@ public:
 private:
 	Stepper *stpX, *stpY;
 	unsigned long f_best, df_max;
-	unsigned long epsilonSq;
+	unsigned long epsilon, epsilonSq;
 	
 	// xy target data
 	vec2 lastTarget;
