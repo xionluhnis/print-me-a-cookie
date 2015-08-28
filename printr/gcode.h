@@ -248,7 +248,7 @@ namespace gcode {
               hasX = hasY = false; // invalidate
             }
           }
-        } return hasX || hasY || hasZ;
+        } return hasX || hasY;
 
         // --- rotation (NOT SUPPORTED)
         case 2:
