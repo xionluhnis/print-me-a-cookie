@@ -186,6 +186,10 @@ public:
         minSteps += delta;
     }
   }
+  void resetBounds() {
+    minSteps = MIN_LONG;
+    maxSteps = MAX_LONG;
+  }
   void resetMemory(){
     f_mem = IDLE_FREQ;
   }

@@ -62,6 +62,7 @@ namespace gcode {
   };
 
   bool debug = false;
+  long Espeed = 10L;
   
   class CommandReader {
   public:
@@ -202,19 +203,19 @@ namespace gcode {
             if(E == 0L){
               stpE->moveToFreq(0L);
             } else if(E > 0){
-              stpE->moveToFreq(10L);
+              stpE->moveToFreq(Espeed);
             } else {
-              stpE->moveToFreq(-10L);
+              stpE->moveToFreq(-Espeed);
             }
           } else if(hasA){
-            long dE = lastE - A; // relative extrusion level
+            long dE = A - lastE; // relative extrusion level
             lastE = A; // absolute extrusion level
             if(dE == 0L){
               stpE->moveToFreq(0L);
             } else if(dE > 0){
-              stpE->moveToFreq(10L);
+              stpE->moveToFreq(Espeed);
             } else {
-              stpE->moveToFreq(-10L);
+              stpE->moveToFreq(-Espeed);
             }
           } else if(A){
             // stop extrusion?

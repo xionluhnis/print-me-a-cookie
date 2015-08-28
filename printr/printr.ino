@@ -25,7 +25,7 @@
 Stepper stpE0(2, 3, 4, 5, 6, 7, 'e');
 Stepper stpY(8, 9, 10, 11, 12, 13, 'y');
 Stepper stpZ(22, 23, 24, 25, 26, 27, 'z');
-Stepper stpX(28, 29, 30, 31, 32, 33, 'x', HIGH); // /!\ reversed X
+Stepper stpX(28, 29, 30, 31, 32, 33, 'x', LOW); // /!\ reversed X
 
 #define NUM_STEPPERS 4
 Stepper *steppers[NUM_STEPPERS];
@@ -85,8 +85,8 @@ void setup() {
 ///// React to external input //////////////////////////////////
 ////////////////////////////////////////////////////////////////
 #define SWITCH_FIRST 11
-#define SWITCH_X_MIN 11
-#define SWITCH_X_MAX 12
+#define SWITCH_X_MIN 12
+#define SWITCH_X_MAX 11
 #define SWITCH_Y_MIN 13
 #define SWITCH_Y_MAX 14
 #define SWITCH_Z_MIN 15
@@ -256,6 +256,13 @@ void readCommands(Stream& input){
           case 'h':
             locZ.reset();
             break;
+          case 'R':
+          case 'r':
+            stpX.resetBounds();
+            stpY.resetBounds();
+            locXY.resetX(0L);
+            locXY.resetY(0L);
+            locZ.resetZ(0L);
           default:
             resetAll();
             break;
@@ -416,6 +423,13 @@ void readCommands(Stream& input){
               } else {
                 error = ERR_INVALID_SETTINGS;
                 return;
+              }
+            } else if(c1== 's' || c1 == 'S'){
+              long s = command.readLong();
+              if(s){
+                gcode::Espeed = s;
+                Serial.print("Extrusion speed set to ");
+                Serial.println(s, DEC);
               }
             } else {
               char c2 = command.readChar();
